@@ -1,0 +1,237 @@
+"use client";
+
+import type { WordCardInput } from "./schema";
+import {
+  FIELD_LIMITS,
+  MAX_EXAMPLES_PER_WORD,
+  SUGGESTED_DIALECTS,
+} from "./constants";
+import { Field } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+
+export type FieldErrors = Record<string, string | undefined>;
+
+interface WordCardProps {
+  index: number;
+  total: number;
+  card: WordCardInput;
+  errors?: FieldErrors;
+  onUpdateField: (
+    field: "word" | "dialect" | "msaSynonym" | "explanation",
+    value: string,
+  ) => void;
+  onUpdateExample: (index: number, value: string) => void;
+  onAddExample: () => void;
+  onRemoveExample: (index: number) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canRemove: boolean;
+}
+
+export function WordCard({
+  index,
+  total,
+  card,
+  errors = {},
+  onUpdateField,
+  onUpdateExample,
+  onAddExample,
+  onRemoveExample,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  canRemove,
+}: WordCardProps) {
+  const base = `word-${card.clientId}`;
+
+  return (
+    <section
+      className="border-border bg-surface flex flex-col gap-4 rounded-2xl border p-4 shadow-sm sm:p-5"
+      aria-labelledby={`${base}-heading`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2
+          id={`${base}-heading`}
+          className="text-foreground text-base font-bold"
+        >
+          الكلمة {toArabicDigits(index + 1)}
+        </h2>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-9 px-2 text-xs"
+            onClick={onMoveUp}
+            disabled={index === 0}
+            aria-label="نقل الكلمة للأعلى"
+          >
+            ▲
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-9 px-2 text-xs"
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            aria-label="نقل الكلمة للأسفل"
+          >
+            ▼
+          </Button>
+          {canRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-danger min-h-9 px-2 text-xs"
+              onClick={onRemove}
+              aria-label={`حذف الكلمة ${toArabicDigits(index + 1)}`}
+            >
+              حذف
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <Field
+        id={`${base}-word`}
+        label="الكلمة باللهجة"
+        required
+        error={errors.word}
+      >
+        <input
+          id={`${base}-word`}
+          value={card.word}
+          maxLength={FIELD_LIMITS.word}
+          onChange={(e) => onUpdateField("word", e.target.value)}
+          className={inputClass(Boolean(errors.word))}
+          aria-invalid={Boolean(errors.word)}
+          aria-describedby={errors.word ? `${base}-word-error` : undefined}
+        />
+      </Field>
+
+      <Field
+        id={`${base}-dialect`}
+        label="اللهجة أو المنطقة"
+        required
+        error={errors.dialect}
+      >
+        <input
+          id={`${base}-dialect`}
+          list={`${base}-dialect-options`}
+          value={card.dialect}
+          maxLength={FIELD_LIMITS.dialect}
+          placeholder="اكتب اللهجة أو المنطقة"
+          onChange={(e) => onUpdateField("dialect", e.target.value)}
+          className={inputClass(Boolean(errors.dialect))}
+          aria-invalid={Boolean(errors.dialect)}
+        />
+        <datalist id={`${base}-dialect-options`}>
+          {SUGGESTED_DIALECTS.map((d) => (
+            <option key={d} value={d} />
+          ))}
+        </datalist>
+      </Field>
+
+      <Field
+        id={`${base}-msa`}
+        label="مرادفها بالعربية الفصحى"
+        required
+        error={errors.msaSynonym}
+      >
+        <input
+          id={`${base}-msa`}
+          value={card.msaSynonym}
+          maxLength={FIELD_LIMITS.msaSynonym}
+          onChange={(e) => onUpdateField("msaSynonym", e.target.value)}
+          className={inputClass(Boolean(errors.msaSynonym))}
+          aria-invalid={Boolean(errors.msaSynonym)}
+        />
+      </Field>
+
+      <Field
+        id={`${base}-explanation`}
+        label="المعنى ومتى تُستخدم"
+        error={errors.explanation}
+      >
+        <textarea
+          id={`${base}-explanation`}
+          value={card.explanation ?? ""}
+          maxLength={FIELD_LIMITS.explanation}
+          rows={3}
+          onChange={(e) => onUpdateField("explanation", e.target.value)}
+          className={inputClass(Boolean(errors.explanation))}
+        />
+      </Field>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-foreground text-sm font-medium">
+          الأمثلة <span className="text-danger">*</span>
+        </legend>
+        <div className="flex flex-col gap-2">
+          {card.examples.map((ex, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div className="flex-1">
+                <label htmlFor={`${base}-example-${i}`} className="sr-only">
+                  {i === 0
+                    ? "مثال في جملة"
+                    : `مثال إضافي ${toArabicDigits(i + 1)}`}
+                </label>
+                <input
+                  id={`${base}-example-${i}`}
+                  value={ex.sentence}
+                  maxLength={FIELD_LIMITS.example}
+                  placeholder={i === 0 ? "مثال في جملة" : "مثال إضافي"}
+                  onChange={(e) => onUpdateExample(i, e.target.value)}
+                  className={inputClass(Boolean(errors[`example-${i}`]))}
+                  aria-invalid={Boolean(errors[`example-${i}`])}
+                />
+                {errors[`example-${i}`] ? (
+                  <p
+                    role="alert"
+                    className="text-danger mt-1 text-sm font-medium"
+                  >
+                    {errors[`example-${i}`]}
+                  </p>
+                ) : null}
+              </div>
+              {card.examples.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-danger min-h-11 px-2 text-xs"
+                  onClick={() => onRemoveExample(i)}
+                  aria-label={`حذف المثال ${toArabicDigits(i + 1)}`}
+                >
+                  حذف
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="self-start"
+          onClick={onAddExample}
+          disabled={card.examples.length >= MAX_EXAMPLES_PER_WORD}
+        >
+          + إضافة مثال
+        </Button>
+      </fieldset>
+    </section>
+  );
+}
+
+function inputClass(hasError: boolean) {
+  return `min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+    hasError ? "border-danger" : "border-border"
+  }`;
+}
+
+const ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+function toArabicDigits(n: number): string {
+  return String(n)
+    .split("")
+    .map((d) => ARABIC_DIGITS[Number(d)] ?? d)
+    .join("");
+}

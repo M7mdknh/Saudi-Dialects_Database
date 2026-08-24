@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbf9f6;
+  --foreground: #1f1a17;
+  --surface: #ffffff;
+  --surface-muted: #f2ece4;
+  --accent: #a8532f;
+  --accent-foreground: #ffffff;
+  --border: #e4dcd1;
+  --danger: #b3261e;
+  --success: #2e7d4f;
+  --focus-ring: #a8532f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --font-arabic:
+    "Segoe UI", "Tahoma", "Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic",
+    "Arial", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #16130f;
+    --foreground: #f2ece4;
+    --surface: #201b16;
+    --surface-muted: #2a231c;
+    --accent: #d98356;
+    --accent-foreground: #16130f;
+    --border: #3a3129;
+    --danger: #ff8a80;
+    --success: #7fd99e;
+    --focus-ring: #d98356;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-arabic);
+}
+
+* {
+  scrollbar-color: var(--border) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
