@@ -331,6 +331,31 @@ export interface Database {
         };
         Returns: string;
       };
+      bulk_approve_submissions: {
+        Args: {
+          p_actor: string;
+          p_items: unknown;
+          p_visibility: string;
+        };
+        Returns: {
+          submission_id: string;
+          status: "approved" | "conflict" | "failed";
+          entry_id: string | null;
+          error_code: string | null;
+        }[];
+      };
+      bulk_classify_submissions: {
+        Args: {
+          p_actor: string;
+          p_items: unknown;
+        };
+        Returns: {
+          submission_id: string;
+          status: "approved" | "failed";
+          entry_id: string | null;
+          error_code: string | null;
+        }[];
+      };
       record_export: {
         Args: {
           p_actor: string;

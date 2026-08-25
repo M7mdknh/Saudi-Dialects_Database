@@ -1,12 +1,17 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { toSearchKey } from "@/lib/text/normalize-arabic";
 import {
+  countBulkExecutionResults,
   planBulkApproval,
   type BulkApprovalSourceRow,
+  type BulkExecutionCounts,
+  type BulkExecutionRowResult,
   type DialectTaxonomyRow,
+  type HardFailureCategory,
 } from "./bulk-approve";
 import type {
   Database,
@@ -313,26 +318,50 @@ export async function bulkApproveSubmissions(
   return results;
 }
 
-export interface BulkApprovalRowResult {
-  submissionId: string;
-  status: "approved" | "needs_attention" | "failed";
-  reason?:
-    | "empty_label"
-    | "group_conflict"
-    | "ambiguous"
-    | "invalid_trusted_dialect"
-    | "missing_classification"
-    | "stale";
-  entryId?: string | null;
+export interface BulkExecutionOutcome extends BulkExecutionCounts {
+  rows: BulkExecutionRowResult[];
+  /**
+   * Set only when the batch RPC itself could never run (session expired,
+   * the function is missing from PostgREST's schema cache, or a genuine
+   * data-level conflict at the infra layer) — distinct from any individual
+   * row's outcome. When set, `rows` is empty and no submission changed:
+   * the call never executed. See categorizeHardFailure() below.
+   */
+  hardFailure?: { category: HardFailureCategory; correlationId: string };
 }
 
-export interface BulkApprovalOutcome {
-  approvedCount: number;
-  needsAttentionCount: number;
-  reusedDialectCount: number;
-  createdDialectCount: number;
-  mainGroupOnlyCount: number;
-  rows: BulkApprovalRowResult[];
+function categorizeHardFailure(error: unknown): HardFailureCategory {
+  const err = error as { code?: string; message?: string } | null;
+  const code = err?.code;
+  const message = err?.message ?? "";
+  if (
+    code === "42501" ||
+    code === "PGRST301" ||
+    message.includes("not_authorized") ||
+    message.toLowerCase().includes("jwt")
+  ) {
+    return "session_expired";
+  }
+  if (code === "PGRST202" || code === "42883") {
+    return "missing_function";
+  }
+  if (code === "23505" || code === "40001" || code === "23503") {
+    return "data_conflict";
+  }
+  return "unknown";
+}
+
+/** Server-only diagnostic log — counts, codes, and a correlation id only. Never the submitted word, dialect label, session cookie, access token, or any header. */
+function logBulkFailure(
+  correlationId: string,
+  context: {
+    action: "bulk_approve_submissions" | "bulk_classify_submissions";
+    category: HardFailureCategory;
+    requestedCount: number;
+    code?: string;
+  },
+) {
+  console.error("bulk_review_action_failed", { correlationId, ...context });
 }
 
 function toSourceRows(
@@ -388,32 +417,47 @@ async function loadBulkApprovalPlan(submissionIds: string[]) {
  * so a retry of the whole batch never produces a duplicate taxonomy row.
  * Each proposal already carries its own main group (a mixed batch can
  * propose new local labels under several different groups at once).
+ *
+ * Resilient per-proposal: one failing creation (e.g. a transient DB error)
+ * only blocks the handful of rows that specifically needed that new label
+ * — it must never abort dialect creation for the rest of the batch, let
+ * alone the already-fully-classified rows that don't touch this step at
+ * all (see the production incident this module was rewritten to fix).
  */
 async function materializeNewDialects(
   admin: { userId: string },
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   plan: Awaited<ReturnType<typeof planBulkApproval>>,
   dialectRows: Awaited<ReturnType<typeof listDialects>>,
-): Promise<Map<string, string>> {
+): Promise<{
+  createdDialectIdByKey: Map<string, string>;
+  failedDialectKeys: Set<string>;
+}> {
   const mainGroupDialectByCode = new Map(
     dialectRows
       .filter((d) => d.parent_id === null && d.main_group_code)
       .map((d) => [d.main_group_code as string, d.id]),
   );
   const createdDialectIdByKey = new Map<string, string>();
+  const failedDialectKeys = new Set<string>();
   for (const proposal of plan.newDialects) {
-    const { data, error } = await supabase
-      .rpc("create_dialect", {
-        p_actor: admin.userId,
-        p_name_ar: proposal.label,
-        p_slug: proposal.slug,
-        p_parent_id: mainGroupDialectByCode.get(proposal.mainGroupCode) ?? null,
-      })
-      .single();
-    if (error) throw error;
-    createdDialectIdByKey.set(proposal.key, (data as { id: string }).id);
+    try {
+      const { data, error } = await supabase
+        .rpc("create_dialect", {
+          p_actor: admin.userId,
+          p_name_ar: proposal.label,
+          p_slug: proposal.slug,
+          p_parent_id:
+            mainGroupDialectByCode.get(proposal.mainGroupCode) ?? null,
+        })
+        .single();
+      if (error) throw error;
+      createdDialectIdByKey.set(proposal.key, (data as { id: string }).id);
+    } catch {
+      failedDialectKeys.add(proposal.key);
+    }
   }
-  return createdDialectIdByKey;
+  return { createdDialectIdByKey, failedDialectKeys };
 }
 
 /** Resolves a plan row (or its admin override) to a concrete dialect id, or null if it's genuinely unresolved. */
@@ -435,168 +479,219 @@ function resolveDialectId(
  * dialect, a directly-selected main group, or a custom label with its own
  * provisional group (see bulk-approve.ts for the full decision rules).
  * A selected batch may span every main group at once; there is no
- * admin-chosen batch group. Every actual write still goes through the
- * existing narrow, security-definer RPCs (create_dialect,
- * approve_raw_submission) — this only orchestrates them, it never writes to
- * a table directly.
+ * admin-chosen batch group.
+ *
+ * All resolvable rows are approved in ONE round trip to
+ * bulk_approve_submissions() (migration 0024), not one RPC call per row.
+ * That function processes each row inside its own exception-safe block, so
+ * one bad row (a stale version, a deactivated dialect, any unexpected
+ * error) can never erase or hide the rows that already succeeded — the
+ * bug this rewrite fixes: previously, a single thrown per-row error
+ * aborted the whole sequential loop before the client ever learned which
+ * rows had actually been committed.
  */
 export async function bulkApproveWithSubmittedDialects(
   submissionIds: string[],
   visibility: PublicVisibility,
   /** Per-row admin override (submissionId -> dialectId), the exception path for a row the default resolution got wrong — bypasses that row's plan entirely, including any "needs_attention" flag. */
   overrides: Record<string, string> = {},
-): Promise<BulkApprovalOutcome> {
+): Promise<BulkExecutionOutcome> {
   const admin = await requireAdmin();
-  const supabase = await createSupabaseServerClient();
+  const requestedCount = submissionIds.length;
 
-  const { plan, bySubmissionId, dialectRows } =
-    await loadBulkApprovalPlan(submissionIds);
-  const createdDialectIdByKey = await materializeNewDialects(
-    admin,
-    supabase,
-    plan,
-    dialectRows,
-  );
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { plan, bySubmissionId, dialectRows } =
+      await loadBulkApprovalPlan(submissionIds);
+    const { createdDialectIdByKey, failedDialectKeys } =
+      await materializeNewDialects(admin, supabase, plan, dialectRows);
 
-  const rows: BulkApprovalRowResult[] = [];
-  let reusedDialectCount = 0;
-  let createdDialectCount = 0;
-  let mainGroupOnlyCount = 0;
+    const rows: BulkExecutionRowResult[] = [];
+    const items: {
+      submission_id: string;
+      dialect_id: string;
+      expected_updated_at: string | null;
+    }[] = [];
 
-  for (const rowPlan of plan.rowPlans) {
-    const override = overrides[rowPlan.submissionId];
-    const dialectId = resolveDialectId(
-      rowPlan,
-      override,
-      createdDialectIdByKey,
-    );
+    for (const rowPlan of plan.rowPlans) {
+      const override = overrides[rowPlan.submissionId];
 
-    if (!dialectId) {
-      rows.push({
-        submissionId: rowPlan.submissionId,
-        status: "needs_attention",
-        reason:
-          rowPlan.kind === "needs_attention" ? rowPlan.reason : "ambiguous",
+      if (
+        !override &&
+        rowPlan.kind === "create_local" &&
+        failedDialectKeys.has(rowPlan.key)
+      ) {
+        rows.push({
+          submissionId: rowPlan.submissionId,
+          status: "failed",
+          errorCode: "DIALECT_CREATE_FAILED",
+        });
+        continue;
+      }
+
+      const dialectId = resolveDialectId(
+        rowPlan,
+        override,
+        createdDialectIdByKey,
+      );
+      if (!dialectId) {
+        rows.push({
+          submissionId: rowPlan.submissionId,
+          status: "needs_classification",
+          errorCode:
+            rowPlan.kind === "needs_attention"
+              ? rowPlan.reason.toUpperCase()
+              : "AMBIGUOUS",
+        });
+        continue;
+      }
+
+      const submission = bySubmissionId.get(rowPlan.submissionId);
+      items.push({
+        submission_id: rowPlan.submissionId,
+        dialect_id: dialectId,
+        expected_updated_at: submission?.updated_at ?? null,
       });
-      continue;
     }
 
-    if (override) {
-      // Overridden rows aren't counted toward the default reuse/create/
-      // main-group buckets — the admin explicitly picked this dialect.
-    } else if (rowPlan.kind === "trusted_local") reusedDialectCount += 1;
-    else if (rowPlan.kind === "create_local") createdDialectCount += 1;
-    else if (rowPlan.kind === "main_group") mainGroupOnlyCount += 1;
-
-    const submission = bySubmissionId.get(rowPlan.submissionId);
-    const result = await approveSubmission({
-      submissionId: rowPlan.submissionId,
-      dialectId,
-      expectedUpdatedAt: submission?.updated_at ?? null,
-      visibility,
-    });
-
-    if (result.stale) {
-      rows.push({
-        submissionId: rowPlan.submissionId,
-        status: "needs_attention",
-        reason: "stale",
+    if (items.length > 0) {
+      const { data, error } = await supabase.rpc("bulk_approve_submissions", {
+        p_actor: admin.userId,
+        p_items: items,
+        p_visibility: visibility,
       });
-      continue;
+      if (error) throw error;
+      for (const r of data ?? []) {
+        rows.push({
+          submissionId: r.submission_id,
+          status: r.status,
+          entryId: r.entry_id,
+          errorCode: r.error_code ?? undefined,
+        });
+      }
     }
 
-    rows.push({
-      submissionId: rowPlan.submissionId,
-      status: "approved",
-      entryId: result.entry_id,
+    return { ...countBulkExecutionResults(rows, requestedCount), rows };
+  } catch (error) {
+    const correlationId = randomUUID();
+    const category = categorizeHardFailure(error);
+    logBulkFailure(correlationId, {
+      action: "bulk_approve_submissions",
+      category,
+      requestedCount,
+      code: (error as { code?: string } | null)?.code,
     });
+    return {
+      requestedCount,
+      approvedCount: 0,
+      needsClassificationCount: 0,
+      conflictCount: 0,
+      failedCount: requestedCount,
+      rows: [],
+      hardFailure: { category, correlationId },
+    };
   }
-
-  return {
-    approvedCount: rows.filter((r) => r.status === "approved").length,
-    needsAttentionCount: rows.filter((r) => r.status !== "approved").length,
-    reusedDialectCount,
-    createdDialectCount,
-    mainGroupOnlyCount,
-    rows,
-  };
 }
 
 /**
  * Classification-only counterpart of bulkApproveWithSubmittedDialects():
  * resolves each row the same way and applies the classification (creating
- * new local dialects as needed) without approving anything — the raw
- * submission's review_status only moves 'new' → 'pending' (see
- * classify_submission()), never to 'approved'.
+ * new local dialects as needed) without approving anything, in one round
+ * trip to bulk_classify_submissions() (migration 0024) — the raw
+ * submission's review_status only moves 'new' → 'pending', never to
+ * 'approved'.
  */
 export async function classifyWithSubmittedDialects(
   submissionIds: string[],
   overrides: Record<string, string> = {},
-): Promise<BulkApprovalOutcome> {
+): Promise<BulkExecutionOutcome> {
   const admin = await requireAdmin();
-  const supabase = await createSupabaseServerClient();
+  const requestedCount = submissionIds.length;
 
-  const { plan, dialectRows } = await loadBulkApprovalPlan(submissionIds);
-  const createdDialectIdByKey = await materializeNewDialects(
-    admin,
-    supabase,
-    plan,
-    dialectRows,
-  );
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { plan, dialectRows } = await loadBulkApprovalPlan(submissionIds);
+    const { createdDialectIdByKey, failedDialectKeys } =
+      await materializeNewDialects(admin, supabase, plan, dialectRows);
 
-  const rows: BulkApprovalRowResult[] = [];
-  let reusedDialectCount = 0;
-  let createdDialectCount = 0;
-  let mainGroupOnlyCount = 0;
+    const rows: BulkExecutionRowResult[] = [];
+    const items: { submission_id: string; dialect_id: string }[] = [];
 
-  for (const rowPlan of plan.rowPlans) {
-    const override = overrides[rowPlan.submissionId];
-    const dialectId = resolveDialectId(
-      rowPlan,
-      override,
-      createdDialectIdByKey,
-    );
+    for (const rowPlan of plan.rowPlans) {
+      const override = overrides[rowPlan.submissionId];
 
-    if (!dialectId) {
-      rows.push({
-        submissionId: rowPlan.submissionId,
-        status: "needs_attention",
-        reason:
-          rowPlan.kind === "needs_attention" ? rowPlan.reason : "ambiguous",
+      if (
+        !override &&
+        rowPlan.kind === "create_local" &&
+        failedDialectKeys.has(rowPlan.key)
+      ) {
+        rows.push({
+          submissionId: rowPlan.submissionId,
+          status: "failed",
+          errorCode: "DIALECT_CREATE_FAILED",
+        });
+        continue;
+      }
+
+      const dialectId = resolveDialectId(
+        rowPlan,
+        override,
+        createdDialectIdByKey,
+      );
+      if (!dialectId) {
+        rows.push({
+          submissionId: rowPlan.submissionId,
+          status: "needs_classification",
+          errorCode:
+            rowPlan.kind === "needs_attention"
+              ? rowPlan.reason.toUpperCase()
+              : "AMBIGUOUS",
+        });
+        continue;
+      }
+
+      items.push({
+        submission_id: rowPlan.submissionId,
+        dialect_id: dialectId,
       });
-      continue;
     }
 
-    if (override) {
-      // no bucket credit — see bulkApproveWithSubmittedDialects
-    } else if (rowPlan.kind === "trusted_local") reusedDialectCount += 1;
-    else if (rowPlan.kind === "create_local") createdDialectCount += 1;
-    else if (rowPlan.kind === "main_group") mainGroupOnlyCount += 1;
+    if (items.length > 0) {
+      const { data, error } = await supabase.rpc("bulk_classify_submissions", {
+        p_actor: admin.userId,
+        p_items: items,
+      });
+      if (error) throw error;
+      for (const r of data ?? []) {
+        rows.push({
+          submissionId: r.submission_id,
+          status: r.status,
+          entryId: r.entry_id,
+          errorCode: r.error_code ?? undefined,
+        });
+      }
+    }
 
-    const { error } = await supabase.rpc("classify_submission", {
-      p_actor: admin.userId,
-      p_submission_id: rowPlan.submissionId,
-      p_dialect_id: dialectId,
+    return { ...countBulkExecutionResults(rows, requestedCount), rows };
+  } catch (error) {
+    const correlationId = randomUUID();
+    const category = categorizeHardFailure(error);
+    logBulkFailure(correlationId, {
+      action: "bulk_classify_submissions",
+      category,
+      requestedCount,
+      code: (error as { code?: string } | null)?.code,
     });
-    if (error) {
-      rows.push({
-        submissionId: rowPlan.submissionId,
-        status: "failed",
-      });
-      continue;
-    }
-
-    rows.push({ submissionId: rowPlan.submissionId, status: "approved" });
+    return {
+      requestedCount,
+      approvedCount: 0,
+      needsClassificationCount: 0,
+      conflictCount: 0,
+      failedCount: requestedCount,
+      rows: [],
+      hardFailure: { category, correlationId },
+    };
   }
-
-  return {
-    approvedCount: rows.filter((r) => r.status === "approved").length,
-    needsAttentionCount: rows.filter((r) => r.status !== "approved").length,
-    reusedDialectCount,
-    createdDialectCount,
-    mainGroupOnlyCount,
-    rows,
-  };
 }
 
 /**

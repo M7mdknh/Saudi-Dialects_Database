@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   computeReadiness,
+  countBulkExecutionResults,
   formatBulkApprovalResultMessage,
+  formatBulkExecutionMessage,
+  formatHardFailureMessage,
   formatReadinessSummary,
   planBulkApproval,
   summarizeBulkApprovalPlan,
   type BulkApprovalSourceRow,
+  type BulkExecutionRowResult,
   type DialectTaxonomyRow,
 } from "./bulk-approve";
 
@@ -511,5 +515,93 @@ describe("formatBulkApprovalResultMessage", () => {
         needsAttentionCount: 0,
       }),
     ).toBe("تم اعتماد كلمتين.");
+  });
+});
+
+describe("countBulkExecutionResults", () => {
+  it("buckets every row into exactly one status, matching requestedCount even when some rows never got a plan row (e.g. no dialect resolved at all)", () => {
+    const rows: BulkExecutionRowResult[] = [
+      { submissionId: "s1", status: "approved", entryId: "e1" },
+      { submissionId: "s2", status: "needs_classification" },
+      { submissionId: "s3", status: "conflict" },
+      { submissionId: "s4", status: "failed", errorCode: "INVALID_DIALECT" },
+    ];
+    expect(countBulkExecutionResults(rows, 5)).toEqual({
+      requestedCount: 5,
+      approvedCount: 1,
+      needsClassificationCount: 1,
+      conflictCount: 1,
+      failedCount: 1,
+    });
+  });
+});
+
+describe("formatBulkExecutionMessage", () => {
+  it("matches the documented public quick-approval result exactly", () => {
+    expect(
+      formatBulkExecutionMessage(
+        {
+          requestedCount: 25,
+          approvedCount: 23,
+          needsClassificationCount: 1,
+          conflictCount: 1,
+          failedCount: 0,
+        },
+        "public",
+      ),
+    ).toBe(
+      "تم اعتماد 23 كلمة ونشرها.\n" +
+        "تحتاج كلمة واحدة إلى مراجعة اللهجة.\n" +
+        "تعارض تحديث كلمة واحدة؛ حدّث الصفحة وحاول مجددًا.",
+    );
+  });
+
+  it("uses the private wording when approving without publishing", () => {
+    expect(
+      formatBulkExecutionMessage(
+        {
+          requestedCount: 3,
+          approvedCount: 3,
+          needsClassificationCount: 0,
+          conflictCount: 0,
+          failedCount: 0,
+        },
+        "private",
+      ),
+    ).toBe("تم اعتماد 3 كلمات دون نشرها.");
+  });
+
+  it("reports an unexpected-error line distinct from a conflict line", () => {
+    expect(
+      formatBulkExecutionMessage(
+        {
+          requestedCount: 1,
+          approvedCount: 0,
+          needsClassificationCount: 0,
+          conflictCount: 0,
+          failedCount: 1,
+        },
+        "public",
+      ),
+    ).toBe("تعذّر اعتماد كلمة واحدة بسبب خطأ غير متوقع.");
+  });
+});
+
+describe("formatHardFailureMessage", () => {
+  it("gives a stable, specific message per category instead of one generic catch-all", () => {
+    expect(formatHardFailureMessage("session_expired", "abc")).toBe(
+      "تعذّر الاعتماد بسبب انتهاء الجلسة.",
+    );
+    expect(formatHardFailureMessage("missing_function", "abc")).toBe(
+      "تعذّر العثور على دالة الاعتماد في قاعدة البيانات.",
+    );
+    expect(formatHardFailureMessage("data_conflict", "abc")).toBe(
+      "تعذّر الاعتماد بسبب تعارض البيانات.",
+    );
+  });
+
+  it("includes the correlation id only in the unknown-category fallback", () => {
+    const message = formatHardFailureMessage("unknown", "corr-123");
+    expect(message).toContain("corr-123");
   });
 });

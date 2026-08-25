@@ -324,3 +324,134 @@ export function formatBulkApprovalResultMessage(params: {
   const attentionPart = `تحتاج ${needsAttentionCountPhrase(needsAttentionCount)} إلى مراجعة اللهجة.`;
   return `${approvedPart} ${attentionPart}`;
 }
+
+// --- Structured per-row execution result (bulk_approve_submissions /
+// bulk_classify_submissions RPCs) — one round trip, per-row exception-safe.
+// See migration 0024: a single failing row can never abort the batch or
+// hide already-committed successes from the admin. -----------------------
+
+export type BulkExecutionRowStatus =
+  "approved" | "needs_classification" | "conflict" | "failed";
+
+export interface BulkExecutionRowResult {
+  submissionId: string;
+  status: BulkExecutionRowStatus;
+  entryId?: string | null;
+  errorCode?: string;
+}
+
+export interface BulkExecutionCounts {
+  requestedCount: number;
+  approvedCount: number;
+  needsClassificationCount: number;
+  conflictCount: number;
+  failedCount: number;
+}
+
+export function countBulkExecutionResults(
+  rows: BulkExecutionRowResult[],
+  requestedCount: number,
+): BulkExecutionCounts {
+  return {
+    requestedCount,
+    approvedCount: rows.filter((r) => r.status === "approved").length,
+    needsClassificationCount: rows.filter(
+      (r) => r.status === "needs_classification",
+    ).length,
+    conflictCount: rows.filter((r) => r.status === "conflict").length,
+    failedCount: rows.filter((r) => r.status === "failed").length,
+  };
+}
+
+function stalePhrase(n: number): string {
+  if (n === 1) return "كلمة واحدة";
+  if (n === 2) return "كلمتين";
+  if (n >= 3 && n <= 10) return `${n} كلمات`;
+  return `${n} كلمة`;
+}
+
+/**
+ * Multi-line, per-category Arabic result — never a single collapsed
+ * "حاول مرة أخرى" regardless of how many different things happened in one
+ * batch. Empty string only when nothing was requested at all.
+ */
+export function formatBulkExecutionMessage(
+  counts: BulkExecutionCounts,
+  visibility: "public" | "private",
+): string {
+  const lines: string[] = [];
+  if (counts.approvedCount > 0) {
+    const phrase = approvedCountPhrase(counts.approvedCount);
+    lines.push(
+      visibility === "public"
+        ? `تم اعتماد ${phrase} ونشرها.`
+        : `تم اعتماد ${phrase} دون نشرها.`,
+    );
+  }
+  if (counts.needsClassificationCount > 0) {
+    lines.push(
+      `تحتاج ${needsAttentionCountPhrase(counts.needsClassificationCount)} إلى مراجعة اللهجة.`,
+    );
+  }
+  if (counts.conflictCount > 0) {
+    lines.push(
+      `تعارض تحديث ${stalePhrase(counts.conflictCount)}؛ حدّث الصفحة وحاول مجددًا.`,
+    );
+  }
+  if (counts.failedCount > 0) {
+    lines.push(
+      `تعذّر اعتماد ${stalePhrase(counts.failedCount)} بسبب خطأ غير متوقع.`,
+    );
+  }
+  if (lines.length === 0) return "لا توجد سجلات قابلة للمعالجة.";
+  return lines.join("\n");
+}
+
+/** Classification-only counterpart — no visibility choice, no "approved" wording. */
+export function formatBulkClassifyMessage(counts: BulkExecutionCounts): string {
+  const lines: string[] = [];
+  if (counts.approvedCount > 0) {
+    lines.push(
+      `تم تصنيف ${approvedCountPhrase(counts.approvedCount)} (مسودة، غير معتمد بعد).`,
+    );
+  }
+  if (counts.needsClassificationCount > 0) {
+    lines.push(
+      `تحتاج ${needsAttentionCountPhrase(counts.needsClassificationCount)} إلى مراجعة اللهجة.`,
+    );
+  }
+  if (counts.failedCount > 0) {
+    lines.push(
+      `تعذّر تصنيف ${stalePhrase(counts.failedCount)} بسبب خطأ غير متوقع.`,
+    );
+  }
+  if (lines.length === 0) return "لا توجد سجلات قابلة للمعالجة.";
+  return lines.join("\n");
+}
+
+/**
+ * When the batch RPC call itself couldn't run at all (session expired,
+ * function missing from PostgREST's schema cache, or a genuine data
+ * conflict at the infrastructure level) — distinct from any individual
+ * row's outcome above, and distinct from the generic catch-all this
+ * replaces. Zero rows changed in every one of these categories: the RPC
+ * call never executed.
+ */
+export type HardFailureCategory =
+  "session_expired" | "missing_function" | "data_conflict" | "unknown";
+
+export function formatHardFailureMessage(
+  category: HardFailureCategory,
+  correlationId: string,
+): string {
+  switch (category) {
+    case "session_expired":
+      return "تعذّر الاعتماد بسبب انتهاء الجلسة.";
+    case "missing_function":
+      return "تعذّر العثور على دالة الاعتماد في قاعدة البيانات.";
+    case "data_conflict":
+      return "تعذّر الاعتماد بسبب تعارض البيانات.";
+    default:
+      return `تعذّر تنفيذ الاعتماد. حاول مرة أخرى (المعرّف: ${correlationId}).`;
+  }
+}

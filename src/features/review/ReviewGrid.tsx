@@ -15,7 +15,9 @@ import {
 } from "./actions";
 import {
   computeReadiness,
-  formatBulkApprovalResultMessage,
+  formatBulkClassifyMessage,
+  formatBulkExecutionMessage,
+  formatHardFailureMessage,
   formatReadinessSummary,
   type NeedsAttentionReason,
 } from "./bulk-approve";
@@ -134,6 +136,9 @@ export function ReviewGrid({
   > | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [actionInFlight, setActionInFlight] = useState<
+    "approve_public" | "approve_private" | "classify" | null
+  >(null);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -225,70 +230,75 @@ export function ReviewGrid({
     plan && readiness && readiness.ready > 0 && !pending,
   );
 
+  /** Keeps unresolved/conflicting/failed rows selected (and their overrides) so the admin can fix or retry immediately; drops only the rows the batch actually finished successfully. */
+  function reconcileAfterBatch(
+    rows: { submissionId: string; status: string }[],
+  ) {
+    const remaining = new Set(
+      rows.filter((r) => r.status !== "approved").map((r) => r.submissionId),
+    );
+    setSelected(remaining);
+    setOverrides((prev) => {
+      const next: Record<string, string> = {};
+      for (const id of remaining) if (prev[id]) next[id] = prev[id];
+      return next;
+    });
+    setPlan(null);
+  }
+
   function runFastApproval(publish: boolean) {
     if (!plan || !readiness || readiness.ready === 0) return;
     if (readiness.total >= 20 && !confirm(`اعتماد ${readiness.ready} كلمة؟`)) {
       return;
     }
+    setActionInFlight(publish ? "approve_public" : "approve_private");
     startTransition(async () => {
-      try {
-        const outcome = await bulkApproveWithSubmittedDialects(
-          selectedIds,
-          publish ? "public" : "private",
-          overrides,
-        );
+      const outcome = await bulkApproveWithSubmittedDialects(
+        selectedIds,
+        publish ? "public" : "private",
+        overrides,
+      );
+      setActionInFlight(null);
+      if (outcome.hardFailure) {
         setMessage(
-          formatBulkApprovalResultMessage({
-            approvedCount: outcome.approvedCount,
-            needsAttentionCount: outcome.needsAttentionCount,
-          }),
+          formatHardFailureMessage(
+            outcome.hardFailure.category,
+            outcome.hardFailure.correlationId,
+          ),
         );
-        // Keep unresolved rows selected so the admin can fix or override
-        // them immediately; drop only the successfully processed ones.
-        const stillUnresolved = new Set(
-          outcome.rows
-            .filter((r) => r.status !== "approved")
-            .map((r) => r.submissionId),
-        );
-        setSelected(stillUnresolved);
-        setOverrides((prev) => {
-          const next: Record<string, string> = {};
-          for (const id of stillUnresolved) if (prev[id]) next[id] = prev[id];
-          return next;
-        });
-        setPlan(null);
-        router.refresh();
-      } catch {
-        setMessage("تعذّر تنفيذ الاعتماد. حاول مرة أخرى.");
+        // A hard failure means the RPC never ran: nothing changed, so every
+        // requested row stays selected exactly as it was.
+        return;
       }
+      setMessage(
+        formatBulkExecutionMessage(outcome, publish ? "public" : "private"),
+      );
+      reconcileAfterBatch(outcome.rows);
+      router.refresh();
     });
   }
 
   function runClassifyOnly() {
     if (!plan || !readiness || readiness.ready === 0) return;
+    setActionInFlight("classify");
     startTransition(async () => {
-      try {
-        const outcome = await classifyWithSubmittedDialects(
-          selectedIds,
-          overrides,
-        );
+      const outcome = await classifyWithSubmittedDialects(
+        selectedIds,
+        overrides,
+      );
+      setActionInFlight(null);
+      if (outcome.hardFailure) {
         setMessage(
-          `تم تصنيف ${outcome.approvedCount} (مسودة، غير معتمد بعد).` +
-            (outcome.needsAttentionCount > 0
-              ? ` تحتاج ${outcome.needsAttentionCount} إلى مراجعة اللهجة.`
-              : ""),
+          formatHardFailureMessage(
+            outcome.hardFailure.category,
+            outcome.hardFailure.correlationId,
+          ),
         );
-        const stillUnresolved = new Set(
-          outcome.rows
-            .filter((r) => r.status !== "approved")
-            .map((r) => r.submissionId),
-        );
-        setSelected(stillUnresolved);
-        setPlan(null);
-        router.refresh();
-      } catch {
-        setMessage("تعذّر تنفيذ التصنيف. حاول مرة أخرى.");
+        return;
       }
+      setMessage(formatBulkClassifyMessage(outcome));
+      reconcileAfterBatch(outcome.rows);
+      router.refresh();
     });
   }
 
@@ -365,7 +375,13 @@ export function ReviewGrid({
             تم تحديد {selectedIds.length} سجل
           </span>
 
-          {readiness ? (
+          {actionInFlight ? (
+            <p role="status" className="text-foreground text-sm font-medium">
+              {actionInFlight === "classify"
+                ? `جارٍ تصنيف ${readiness?.ready ?? selectedIds.length} كلمة…`
+                : `جارٍ اعتماد ${readiness?.ready ?? selectedIds.length} كلمة…`}
+            </p>
+          ) : readiness ? (
             <p role="status" className="text-sm font-medium">
               {formatReadinessSummary(readiness)}
             </p>
@@ -613,7 +629,10 @@ export function ReviewGrid({
       ) : null}
 
       {message ? (
-        <p role="status" className="text-foreground/70 text-sm">
+        <p
+          role="status"
+          className="text-foreground/70 text-sm whitespace-pre-line"
+        >
           {message}
         </p>
       ) : null}
