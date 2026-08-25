@@ -152,6 +152,7 @@ export interface Database {
         prompt_version: number;
         is_active: boolean;
         dataset_schema_version: number;
+        display_order: number;
         created_at: string;
         updated_at: string;
       }>;
