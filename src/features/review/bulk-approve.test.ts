@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeReadiness,
   formatBulkApprovalResultMessage,
+  formatReadinessSummary,
   planBulkApproval,
   summarizeBulkApprovalPlan,
+  type BulkApprovalSourceRow,
   type DialectTaxonomyRow,
 } from "./bulk-approve";
 
@@ -20,6 +23,20 @@ const NAJDI_MAIN: DialectTaxonomyRow = {
   mainGroupCode: "najdi",
   isActive: true,
 };
+const EASTERN_MAIN: DialectTaxonomyRow = {
+  id: "eastern-main",
+  nameAr: "شرقاوي",
+  parentId: null,
+  mainGroupCode: "eastern",
+  isActive: true,
+};
+const SOUTHERN_MAIN: DialectTaxonomyRow = {
+  id: "southern-main",
+  nameAr: "جنوبي",
+  parentId: null,
+  mainGroupCode: "southern",
+  isActive: true,
+};
 const MADANI: DialectTaxonomyRow = {
   id: "madani",
   nameAr: "مديني",
@@ -34,21 +51,52 @@ const QASSIMI: DialectTaxonomyRow = {
   mainGroupCode: "najdi",
   isActive: true,
 };
+const HASAWI: DialectTaxonomyRow = {
+  id: "hasawi",
+  nameAr: "حساوي",
+  parentId: "eastern-main",
+  mainGroupCode: "eastern",
+  isActive: true,
+};
 
-const DIALECTS = [HIJAZI_MAIN, NAJDI_MAIN, MADANI, QASSIMI];
+const DIALECTS = [
+  HIJAZI_MAIN,
+  NAJDI_MAIN,
+  EASTERN_MAIN,
+  SOUTHERN_MAIN,
+  MADANI,
+  QASSIMI,
+  HASAWI,
+];
 
-describe("planBulkApproval — existing trusted local dialect", () => {
-  it("reuses the existing canonical dialect record under the selected group", () => {
+function row(overrides: Partial<BulkApprovalSourceRow>): BulkApprovalSourceRow {
+  return {
+    submissionId: "s1",
+    submittedDialect: "",
+    selectedDialectId: null,
+    provisionalMainGroupCode: null,
+    ...overrides,
+  };
+}
+
+describe("planBulkApproval — rule 1: trusted existing local dialect", () => {
+  it("resolves the trusted dialect's own parent group automatically, no batch group needed", () => {
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "مديني" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "madani",
+        }),
+      ],
       DIALECTS,
     );
     expect(plan.rowPlans).toEqual([
       {
         submissionId: "s1",
-        kind: "reuse",
+        kind: "trusted_local",
         dialectId: "madani",
+        mainGroupCode: "hijazi",
         label: "مديني",
       },
     ]);
@@ -56,58 +104,155 @@ describe("planBulkApproval — existing trusted local dialect", () => {
   });
 });
 
-describe("planBulkApproval — main group submitted directly", () => {
-  it("uses the main group itself, no local dialect required", () => {
+describe("planBulkApproval — rule 2: main group selected directly", () => {
+  it("resolves the main group itself when the trusted selection is a main-group row (no parent)", () => {
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "حجازي" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "جنوبي",
+          selectedDialectId: "southern-main",
+        }),
+      ],
       DIALECTS,
     );
     expect(plan.rowPlans).toEqual([
       {
         submissionId: "s1",
         kind: "main_group",
-        dialectId: "hijazi-main",
-        label: "حجازي",
+        dialectId: "southern-main",
+        mainGroupCode: "southern",
+        label: "جنوبي",
       },
     ]);
   });
 });
 
-describe("planBulkApproval — new valid local dialect", () => {
-  it("proposes creating a new local dialect under the selected group, preserving exact spelling", () => {
+describe("planBulkApproval — rule 3: custom local label with provisional group", () => {
+  it("proposes creating the local label under the contributor's own provisional group", () => {
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "جداوي" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "جداوي",
+          provisionalMainGroupCode: "hijazi",
+        }),
+      ],
       DIALECTS,
     );
     expect(plan.rowPlans).toEqual([
-      { submissionId: "s1", kind: "create", key: "جداوي", label: "جداوي" },
+      {
+        submissionId: "s1",
+        kind: "create_local",
+        key: "hijazi::جداوي",
+        mainGroupCode: "hijazi",
+        label: "جداوي",
+      },
     ]);
     expect(plan.newDialects).toEqual([
-      { key: "جداوي", label: "جداوي", slug: "جداوي" },
+      {
+        key: "hijazi::جداوي",
+        label: "جداوي",
+        slug: "جداوي",
+        mainGroupCode: "hijazi",
+      },
     ]);
   });
 
-  it("creates only one proposal for the same new label reused across several rows in the batch", () => {
+  it("reuses a dialect that already exists under the provisional group instead of duplicating it", () => {
     const plan = planBulkApproval(
       [
-        { submissionId: "s1", submittedDialect: "جداوي" },
-        { submissionId: "s2", submittedDialect: "جداوي" },
+        row({
+          submissionId: "s1",
+          submittedDialect: "حساوي",
+          provisionalMainGroupCode: "eastern",
+        }),
       ],
-      "hijazi",
       DIALECTS,
     );
-    expect(plan.newDialects).toHaveLength(1);
-    expect(plan.rowPlans.every((r) => r.kind === "create")).toBe(true);
+    expect(plan.rowPlans).toEqual([
+      {
+        submissionId: "s1",
+        kind: "trusted_local",
+        dialectId: "hasawi",
+        mainGroupCode: "eastern",
+        label: "حساوي",
+      },
+    ]);
+  });
+
+  it("keys new-dialect proposals by group so the same label under two groups creates two proposals", () => {
+    const plan = planBulkApproval(
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "بدوي",
+          provisionalMainGroupCode: "hijazi",
+        }),
+        row({
+          submissionId: "s2",
+          submittedDialect: "بدوي",
+          provisionalMainGroupCode: "najdi",
+        }),
+      ],
+      DIALECTS,
+    );
+    expect(plan.newDialects).toHaveLength(2);
+    expect(plan.newDialects.map((d) => d.mainGroupCode).sort()).toEqual([
+      "hijazi",
+      "najdi",
+    ]);
+  });
+});
+
+describe("planBulkApproval — rule 4: legacy/unresolved submission", () => {
+  it("flags a submission with no trusted dialect and no provisional group", () => {
+    const plan = planBulkApproval(
+      [row({ submissionId: "s1", submittedDialect: "لهجة قديمة" })],
+      DIALECTS,
+    );
+    expect(plan.rowPlans).toEqual([
+      {
+        submissionId: "s1",
+        kind: "needs_attention",
+        reason: "missing_classification",
+        label: "لهجة قديمة",
+      },
+    ]);
   });
 });
 
 describe("planBulkApproval — conflict / ambiguity", () => {
-  it("flags a submitted dialect that belongs to a different trusted main group", () => {
+  it("flags a stale/invalid trusted dialect id (deleted or deactivated since submission)", () => {
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "قصيمي" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "does-not-exist",
+        }),
+      ],
+      DIALECTS,
+    );
+    expect(plan.rowPlans).toEqual([
+      {
+        submissionId: "s1",
+        kind: "needs_attention",
+        reason: "invalid_trusted_dialect",
+        label: "مديني",
+      },
+    ]);
+  });
+
+  it("flags a custom label matching a dialect under a different trusted group", () => {
+    const plan = planBulkApproval(
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "قصيمي",
+          provisionalMainGroupCode: "hijazi",
+        }),
+      ],
       DIALECTS,
     );
     expect(plan.rowPlans).toEqual([
@@ -129,8 +274,13 @@ describe("planBulkApproval — conflict / ambiguity", () => {
       isActive: true,
     };
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "مديني" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          provisionalMainGroupCode: "hijazi",
+        }),
+      ],
       [...DIALECTS, dupInGroup],
     );
     expect(plan.rowPlans).toEqual([
@@ -143,10 +293,15 @@ describe("planBulkApproval — conflict / ambiguity", () => {
     ]);
   });
 
-  it("flags an empty submitted label", () => {
+  it("flags an empty submitted label even when a provisional group is present", () => {
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "   " }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "   ",
+          provisionalMainGroupCode: "hijazi",
+        }),
+      ],
       DIALECTS,
     );
     expect(plan.rowPlans).toEqual([
@@ -168,11 +323,113 @@ describe("planBulkApproval — conflict / ambiguity", () => {
       isActive: false,
     };
     const plan = planBulkApproval(
-      [{ submissionId: "s1", submittedDialect: "قديم" }],
-      "hijazi",
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "قديم",
+          provisionalMainGroupCode: "hijazi",
+        }),
+      ],
       [...DIALECTS, inactive],
     );
-    expect(plan.rowPlans[0]).toMatchObject({ kind: "create" });
+    expect(plan.rowPlans[0]).toMatchObject({ kind: "create_local" });
+  });
+});
+
+describe("planBulkApproval — mixed-group batch", () => {
+  it("classifies every row independently under its own correct group in one plan", () => {
+    const plan = planBulkApproval(
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "madani",
+        }),
+        row({
+          submissionId: "s2",
+          submittedDialect: "قصيمي",
+          selectedDialectId: "qassimi",
+        }),
+        row({
+          submissionId: "s3",
+          submittedDialect: "حساوي",
+          selectedDialectId: "hasawi",
+        }),
+        row({
+          submissionId: "s4",
+          submittedDialect: "جنوبي",
+          selectedDialectId: "southern-main",
+        }),
+      ],
+      DIALECTS,
+    );
+    expect(
+      plan.rowPlans.map((r) => (r as { mainGroupCode: string }).mainGroupCode),
+    ).toEqual(["hijazi", "najdi", "eastern", "southern"]);
+    expect(computeReadiness(plan)).toEqual({
+      total: 4,
+      ready: 4,
+      needsAttention: 0,
+    });
+  });
+
+  it("does not block resolvable rows because one row in the batch is unresolved", () => {
+    const plan = planBulkApproval(
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "madani",
+        }),
+        row({
+          submissionId: "s2",
+          submittedDialect: "قصيمي",
+          selectedDialectId: "qassimi",
+        }),
+        row({
+          submissionId: "s3",
+          submittedDialect: "حساوي",
+          selectedDialectId: "hasawi",
+        }),
+        row({
+          submissionId: "s4",
+          submittedDialect: "جنوبي",
+          selectedDialectId: "southern-main",
+        }),
+        row({ submissionId: "s5", submittedDialect: "لهجة غير معروفة" }),
+      ],
+      DIALECTS,
+    );
+    expect(computeReadiness(plan)).toEqual({
+      total: 5,
+      ready: 4,
+      needsAttention: 1,
+    });
+  });
+});
+
+describe("computeReadiness / formatReadinessSummary", () => {
+  it("reports only the ready count when nothing needs attention", () => {
+    const plan = planBulkApproval(
+      [
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "madani",
+        }),
+      ],
+      DIALECTS,
+    );
+    expect(formatReadinessSummary(computeReadiness(plan))).toBe(
+      "جاهزة للاعتماد: 1",
+    );
+  });
+
+  it("appends the needs-attention count when present", () => {
+    const readiness = { total: 5, ready: 4, needsAttention: 1 };
+    expect(formatReadinessSummary(readiness)).toBe(
+      "جاهزة للاعتماد: 4 — تحتاج مراجعة: 1",
+    );
   });
 });
 
@@ -180,20 +437,32 @@ describe("summarizeBulkApprovalPlan", () => {
   it("counts each row into exactly one bucket", () => {
     const plan = planBulkApproval(
       [
-        { submissionId: "s1", submittedDialect: "مديني" }, // reuse
-        { submissionId: "s2", submittedDialect: "حجازي" }, // main_group
-        { submissionId: "s3", submittedDialect: "جداوي" }, // create
-        { submissionId: "s4", submittedDialect: "قصيمي" }, // needs_attention
+        row({
+          submissionId: "s1",
+          submittedDialect: "مديني",
+          selectedDialectId: "madani",
+        }), // trusted_local
+        row({
+          submissionId: "s2",
+          submittedDialect: "حجازي",
+          selectedDialectId: "hijazi-main",
+        }), // main_group
+        row({
+          submissionId: "s3",
+          submittedDialect: "جداوي",
+          provisionalMainGroupCode: "hijazi",
+        }), // create_local
+        row({ submissionId: "s4", submittedDialect: "؟؟" }), // needs_attention
       ],
-      "hijazi",
       DIALECTS,
     );
     expect(summarizeBulkApprovalPlan(plan)).toEqual({
       total: 4,
+      ready: 3,
+      needsAttention: 1,
       reusingExisting: 1,
       creatingNew: 1,
       mainGroupOnly: 1,
-      needsAttention: 1,
     });
   });
 });

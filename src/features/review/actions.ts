@@ -316,7 +316,13 @@ export async function bulkApproveSubmissions(
 export interface BulkApprovalRowResult {
   submissionId: string;
   status: "approved" | "needs_attention" | "failed";
-  reason?: "empty_label" | "group_conflict" | "ambiguous" | "stale";
+  reason?:
+    | "empty_label"
+    | "group_conflict"
+    | "ambiguous"
+    | "invalid_trusted_dialect"
+    | "missing_classification"
+    | "stale";
   entryId?: string | null;
 }
 
@@ -329,55 +335,70 @@ export interface BulkApprovalOutcome {
   rows: BulkApprovalRowResult[];
 }
 
-/**
- * Fast bulk-approval flow: the admin picks the main group once, and each
- * word's own submitted dialect (not a repeated manual dropdown) decides its
- * local classification — reusing an existing trusted local dialect,
- * resolving to the main group itself, or proposing a new local dialect
- * scoped under the selected group. See bulk-approve.ts for the pure
- * decision rules. Every actual write still goes through the existing
- * narrow, security-definer RPCs (create_dialect, approve_raw_submission) —
- * this only orchestrates them, it never writes to a table directly.
- */
-export async function bulkApproveWithSubmittedDialects(
+function toSourceRows(
   submissionIds: string[],
-  mainGroupCode: MainDialectGroupCode,
-  visibility: PublicVisibility,
-  /** Per-row admin override (submissionId -> dialectId), the exception path for a row the default resolution got wrong — bypasses that row's plan entirely, including any "needs_attention" flag. */
-  overrides: Record<string, string> = {},
-): Promise<BulkApprovalOutcome> {
-  const admin = await requireAdmin();
-  const supabase = await createSupabaseServerClient();
-
-  const [submissions, dialectRows] = await Promise.all([
-    getSubmissionsByIds(submissionIds),
-    listDialects(),
-  ]);
-
-  const bySubmissionId = new Map(submissions.map((s) => [s.id, s]));
-  const sourceRows: BulkApprovalSourceRow[] = submissionIds
+  bySubmissionId: Map<string, RawSubmissionWithExamples>,
+): BulkApprovalSourceRow[] {
+  return submissionIds
     .map((id) => bySubmissionId.get(id))
     .filter((s): s is RawSubmissionWithExamples => Boolean(s))
     .map((s) => ({
       submissionId: s.id,
       submittedDialect: s.submitted_dialect,
+      selectedDialectId: s.selected_dialect_id,
+      provisionalMainGroupCode: s.provisional_main_group_code,
     }));
+}
 
-  const taxonomy: DialectTaxonomyRow[] = dialectRows.map((d) => ({
+function toTaxonomyRows(
+  dialectRows: Awaited<ReturnType<typeof listDialects>>,
+): DialectTaxonomyRow[] {
+  return dialectRows.map((d) => ({
     id: d.id,
     nameAr: d.name_ar,
     parentId: d.parent_id,
     mainGroupCode: d.main_group_code,
     isActive: d.is_active,
   }));
+}
 
-  const plan = planBulkApproval(sourceRows, mainGroupCode, taxonomy);
+/**
+ * Loads everything planBulkApproval() needs: each submission's own
+ * classification signal (selected_dialect_id / provisional_main_group_code
+ * — set by the contribution form, see migration 0019) and the active
+ * dialect taxonomy. There is deliberately no admin-chosen batch group here
+ * — every row resolves from its own data.
+ */
+async function loadBulkApprovalPlan(submissionIds: string[]) {
+  const [submissions, dialectRows] = await Promise.all([
+    getSubmissionsByIds(submissionIds),
+    listDialects(),
+  ]);
+  const bySubmissionId = new Map(submissions.map((s) => [s.id, s]));
+  const plan = planBulkApproval(
+    toSourceRows(submissionIds, bySubmissionId),
+    toTaxonomyRows(dialectRows),
+  );
+  return { plan, bySubmissionId, dialectRows };
+}
 
-  // Create each proposed new local dialect once, up front — create_dialect()
-  // is idempotent on a slug collision (see migration 0022), so a retry of
-  // this whole batch never produces a duplicate taxonomy row.
-  const mainGroupDialect = dialectRows.find(
-    (d) => d.main_group_code === mainGroupCode && d.parent_id === null,
+/**
+ * Creates every proposed new local dialect once, up front —
+ * create_dialect() is idempotent on a slug collision (see migration 0022),
+ * so a retry of the whole batch never produces a duplicate taxonomy row.
+ * Each proposal already carries its own main group (a mixed batch can
+ * propose new local labels under several different groups at once).
+ */
+async function materializeNewDialects(
+  admin: { userId: string },
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  plan: Awaited<ReturnType<typeof planBulkApproval>>,
+  dialectRows: Awaited<ReturnType<typeof listDialects>>,
+): Promise<Map<string, string>> {
+  const mainGroupDialectByCode = new Map(
+    dialectRows
+      .filter((d) => d.parent_id === null && d.main_group_code)
+      .map((d) => [d.main_group_code as string, d.id]),
   );
   const createdDialectIdByKey = new Map<string, string>();
   for (const proposal of plan.newDialects) {
@@ -386,12 +407,56 @@ export async function bulkApproveWithSubmittedDialects(
         p_actor: admin.userId,
         p_name_ar: proposal.label,
         p_slug: proposal.slug,
-        p_parent_id: mainGroupDialect?.id ?? null,
+        p_parent_id: mainGroupDialectByCode.get(proposal.mainGroupCode) ?? null,
       })
       .single();
     if (error) throw error;
     createdDialectIdByKey.set(proposal.key, (data as { id: string }).id);
   }
+  return createdDialectIdByKey;
+}
+
+/** Resolves a plan row (or its admin override) to a concrete dialect id, or null if it's genuinely unresolved. */
+function resolveDialectId(
+  rowPlan: ReturnType<typeof planBulkApproval>["rowPlans"][number],
+  override: string | undefined,
+  createdDialectIdByKey: Map<string, string>,
+): string | null {
+  if (override) return override;
+  if (rowPlan.kind === "needs_attention") return null;
+  if (rowPlan.kind === "create_local")
+    return createdDialectIdByKey.get(rowPlan.key) ?? null;
+  return rowPlan.dialectId;
+}
+
+/**
+ * Fast bulk-approval flow: every selected word classifies and approves
+ * itself from its own submitted-dialect information — a trusted selected
+ * dialect, a directly-selected main group, or a custom label with its own
+ * provisional group (see bulk-approve.ts for the full decision rules).
+ * A selected batch may span every main group at once; there is no
+ * admin-chosen batch group. Every actual write still goes through the
+ * existing narrow, security-definer RPCs (create_dialect,
+ * approve_raw_submission) — this only orchestrates them, it never writes to
+ * a table directly.
+ */
+export async function bulkApproveWithSubmittedDialects(
+  submissionIds: string[],
+  visibility: PublicVisibility,
+  /** Per-row admin override (submissionId -> dialectId), the exception path for a row the default resolution got wrong — bypasses that row's plan entirely, including any "needs_attention" flag. */
+  overrides: Record<string, string> = {},
+): Promise<BulkApprovalOutcome> {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { plan, bySubmissionId, dialectRows } =
+    await loadBulkApprovalPlan(submissionIds);
+  const createdDialectIdByKey = await materializeNewDialects(
+    admin,
+    supabase,
+    plan,
+    dialectRows,
+  );
 
   const rows: BulkApprovalRowResult[] = [];
   let reusedDialectCount = 0;
@@ -400,23 +465,12 @@ export async function bulkApproveWithSubmittedDialects(
 
   for (const rowPlan of plan.rowPlans) {
     const override = overrides[rowPlan.submissionId];
+    const dialectId = resolveDialectId(
+      rowPlan,
+      override,
+      createdDialectIdByKey,
+    );
 
-    if (rowPlan.kind === "needs_attention" && !override) {
-      rows.push({
-        submissionId: rowPlan.submissionId,
-        status: "needs_attention",
-        reason: rowPlan.reason,
-      });
-      continue;
-    }
-
-    const dialectId =
-      override ??
-      (rowPlan.kind === "create"
-        ? createdDialectIdByKey.get(rowPlan.key)
-        : rowPlan.kind === "needs_attention"
-          ? undefined
-          : rowPlan.dialectId);
     if (!dialectId) {
       rows.push({
         submissionId: rowPlan.submissionId,
@@ -430,8 +484,8 @@ export async function bulkApproveWithSubmittedDialects(
     if (override) {
       // Overridden rows aren't counted toward the default reuse/create/
       // main-group buckets — the admin explicitly picked this dialect.
-    } else if (rowPlan.kind === "reuse") reusedDialectCount += 1;
-    else if (rowPlan.kind === "create") createdDialectCount += 1;
+    } else if (rowPlan.kind === "trusted_local") reusedDialectCount += 1;
+    else if (rowPlan.kind === "create_local") createdDialectCount += 1;
     else if (rowPlan.kind === "main_group") mainGroupOnlyCount += 1;
 
     const submission = bySubmissionId.get(rowPlan.submissionId);
@@ -469,38 +523,92 @@ export async function bulkApproveWithSubmittedDialects(
 }
 
 /**
- * Read-only preview of what bulkApproveWithSubmittedDialects() would do,
- * for the grid's compact preview panel and per-row override affordance —
- * never creates a dialect or approves anything itself.
+ * Classification-only counterpart of bulkApproveWithSubmittedDialects():
+ * resolves each row the same way and applies the classification (creating
+ * new local dialects as needed) without approving anything — the raw
+ * submission's review_status only moves 'new' → 'pending' (see
+ * classify_submission()), never to 'approved'.
  */
-export async function previewBulkApproval(
+export async function classifyWithSubmittedDialects(
   submissionIds: string[],
-  mainGroupCode: MainDialectGroupCode,
-) {
+  overrides: Record<string, string> = {},
+): Promise<BulkApprovalOutcome> {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { plan, dialectRows } = await loadBulkApprovalPlan(submissionIds);
+  const createdDialectIdByKey = await materializeNewDialects(
+    admin,
+    supabase,
+    plan,
+    dialectRows,
+  );
+
+  const rows: BulkApprovalRowResult[] = [];
+  let reusedDialectCount = 0;
+  let createdDialectCount = 0;
+  let mainGroupOnlyCount = 0;
+
+  for (const rowPlan of plan.rowPlans) {
+    const override = overrides[rowPlan.submissionId];
+    const dialectId = resolveDialectId(
+      rowPlan,
+      override,
+      createdDialectIdByKey,
+    );
+
+    if (!dialectId) {
+      rows.push({
+        submissionId: rowPlan.submissionId,
+        status: "needs_attention",
+        reason:
+          rowPlan.kind === "needs_attention" ? rowPlan.reason : "ambiguous",
+      });
+      continue;
+    }
+
+    if (override) {
+      // no bucket credit — see bulkApproveWithSubmittedDialects
+    } else if (rowPlan.kind === "trusted_local") reusedDialectCount += 1;
+    else if (rowPlan.kind === "create_local") createdDialectCount += 1;
+    else if (rowPlan.kind === "main_group") mainGroupOnlyCount += 1;
+
+    const { error } = await supabase.rpc("classify_submission", {
+      p_actor: admin.userId,
+      p_submission_id: rowPlan.submissionId,
+      p_dialect_id: dialectId,
+    });
+    if (error) {
+      rows.push({
+        submissionId: rowPlan.submissionId,
+        status: "failed",
+      });
+      continue;
+    }
+
+    rows.push({ submissionId: rowPlan.submissionId, status: "approved" });
+  }
+
+  return {
+    approvedCount: rows.filter((r) => r.status === "approved").length,
+    needsAttentionCount: rows.filter((r) => r.status !== "approved").length,
+    reusedDialectCount,
+    createdDialectCount,
+    mainGroupOnlyCount,
+    rows,
+  };
+}
+
+/**
+ * Read-only preview of what bulkApproveWithSubmittedDialects() /
+ * classifyWithSubmittedDialects() would do, for the grid's compact
+ * readiness line and per-row override affordance — never creates a dialect
+ * or approves/classifies anything itself.
+ */
+export async function previewBulkApproval(submissionIds: string[]) {
   await requireAdmin();
-  const [submissions, dialectRows] = await Promise.all([
-    getSubmissionsByIds(submissionIds),
-    listDialects(),
-  ]);
-
-  const bySubmissionId = new Map(submissions.map((s) => [s.id, s]));
-  const sourceRows: BulkApprovalSourceRow[] = submissionIds
-    .map((id) => bySubmissionId.get(id))
-    .filter((s): s is RawSubmissionWithExamples => Boolean(s))
-    .map((s) => ({
-      submissionId: s.id,
-      submittedDialect: s.submitted_dialect,
-    }));
-
-  const taxonomy: DialectTaxonomyRow[] = dialectRows.map((d) => ({
-    id: d.id,
-    nameAr: d.name_ar,
-    parentId: d.parent_id,
-    mainGroupCode: d.main_group_code,
-    isActive: d.is_active,
-  }));
-
-  return planBulkApproval(sourceRows, mainGroupCode, taxonomy);
+  const { plan } = await loadBulkApprovalPlan(submissionIds);
+  return plan;
 }
 
 export async function listDialects() {

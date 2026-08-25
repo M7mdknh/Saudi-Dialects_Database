@@ -10,10 +10,15 @@ import {
   bulkSetParticipationExclusion,
   bulkSetReviewStatus,
   bulkSetSubmissionMainGroup,
-  classifySubmissions,
+  classifyWithSubmittedDialects,
   previewBulkApproval,
 } from "./actions";
-import { formatBulkApprovalResultMessage } from "./bulk-approve";
+import {
+  computeReadiness,
+  formatBulkApprovalResultMessage,
+  formatReadinessSummary,
+  type NeedsAttentionReason,
+} from "./bulk-approve";
 import { Button } from "@/components/ui/Button";
 import type {
   MainDialectGroupCode,
@@ -38,10 +43,15 @@ const EXCLUSION_REASON_LABELS: Record<ParticipationExclusionReason, string> = {
   invalid_submission: "مساهمة غير صالحة",
 };
 
-const NEEDS_ATTENTION_REASON_LABELS: Record<string, string> = {
+const NEEDS_ATTENTION_REASON_LABELS: Record<
+  NeedsAttentionReason | "stale",
+  string
+> = {
   empty_label: "لا توجد لهجة مُدخلة",
   group_conflict: "اللهجة المُدخلة تتبع مجموعة رئيسية أخرى",
   ambiguous: "اللهجة المُدخلة تطابق أكثر من لهجة محلية",
+  invalid_trusted_dialect: "اللهجة المختارة لم تعد متاحة",
+  missing_classification: "لا تحمل تصنيفًا مبدئيًا — تحتاج اختيارًا يدويًا",
   stale: "تغيّر السجل من قبل مشرف آخر",
 };
 
@@ -116,13 +126,9 @@ export function ReviewGrid({
   const [exclusionReason, setExclusionReason] = useState<
     ParticipationExclusionReason | ""
   >("");
-  const [bulkDialect, setBulkDialect] = useState("");
   const [bulkMainGroup, setBulkMainGroup] = useState<MainDialectGroupCode | "">(
     "",
   );
-  const [fastApproveGroup, setFastApproveGroup] = useState<
-    MainDialectGroupCode | ""
-  >("");
   const [plan, setPlan] = useState<Awaited<
     ReturnType<typeof previewBulkApproval>
   > | null>(null);
@@ -147,12 +153,22 @@ export function ReviewGrid({
       else next.add(id);
       return next;
     });
+    // Keep any stale override for a row that just left the selection, but
+    // drop the plan so it recomputes against the new selection.
+    setPlan(null);
   }
 
   function toggleAll() {
     setSelected((prev) =>
       prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)),
     );
+    setPlan(null);
+  }
+
+  function clearSelectionState() {
+    setSelected(new Set());
+    setPlan(null);
+    setOverrides({});
   }
 
   function runBulk(action: () => Promise<unknown>, successMessage: string) {
@@ -160,10 +176,7 @@ export function ReviewGrid({
       try {
         await action();
         setMessage(successMessage);
-        setSelected(new Set());
-        setPlan(null);
-        setOverrides({});
-        setFastApproveGroup("");
+        clearSelectionState();
         router.refresh();
       } catch {
         setMessage("تعذّر تنفيذ الإجراء. حاول مرة أخرى.");
@@ -173,67 +186,54 @@ export function ReviewGrid({
 
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
 
-  // Recompute the fast-approval preview (reuse/create/needs-attention
-  // breakdown) whenever the selection or the chosen main group changes, so
-  // the admin sees exactly what will happen before committing.
+  // Recompute the automatic-classification preview (per-row resolution,
+  // never a global batch group) whenever the selection changes — this is
+  // the fix for the buttons-stay-disabled regression: readiness no longer
+  // depends on any admin-chosen group, only on the selection itself.
   useEffect(() => {
-    if (selectedIds.length === 0 || !fastApproveGroup) {
+    if (selectedIds.length === 0) {
       setPlan(null);
       return;
     }
     let cancelled = false;
-    previewBulkApproval(selectedIds, fastApproveGroup).then((result) => {
+    previewBulkApproval(selectedIds).then((result) => {
       if (!cancelled) setPlan(result);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds.join(","), fastApproveGroup]);
+  }, [selectedIds.join(",")]);
 
-  const planSummary = useMemo(() => {
+  const readiness = useMemo(() => {
     if (!plan) return null;
-    let reusing = 0;
-    let creating = 0;
-    let mainGroupOnly = 0;
-    let needsAttention = 0;
-    for (const rowPlan of plan.rowPlans) {
-      const overridden = Boolean(overrides[rowPlan.submissionId]);
-      if (overridden) continue;
-      if (rowPlan.kind === "reuse") reusing += 1;
-      else if (rowPlan.kind === "create") creating += 1;
-      else if (rowPlan.kind === "main_group") mainGroupOnly += 1;
-      else needsAttention += 1;
-    }
+    const base = computeReadiness(plan);
+    const overriddenUnresolved = plan.rowPlans.filter(
+      (r) => r.kind === "needs_attention" && overrides[r.submissionId],
+    ).length;
     return {
-      total: plan.rowPlans.length,
-      reusing,
-      creating,
-      mainGroupOnly,
-      needsAttention: needsAttention,
-      overridden: Object.keys(overrides).length,
+      total: base.total,
+      ready: base.ready + overriddenUnresolved,
+      needsAttention: base.needsAttention - overriddenUnresolved,
     };
   }, [plan, overrides]);
 
+  // The only gate on the quick-approval/classify buttons: a selection
+  // exists, the preview has resolved, and at least one row is actually
+  // resolvable. No global main-group dropdown involved.
+  const canActOnReadyRows = Boolean(
+    plan && readiness && readiness.ready > 0 && !pending,
+  );
+
   function runFastApproval(publish: boolean) {
-    if (!fastApproveGroup) return;
-    const large = selectedIds.length >= 20;
-    const creatingNew = (planSummary?.creating ?? 0) > 0;
-    if (
-      (large || creatingNew) &&
-      !confirm(
-        creatingNew
-          ? `سيتم إنشاء لهجات محلية جديدة ضمن «${MAIN_GROUP_LABELS[fastApproveGroup]}». المتابعة؟`
-          : `اعتماد ${selectedIds.length} كلمة؟`,
-      )
-    ) {
+    if (!plan || !readiness || readiness.ready === 0) return;
+    if (readiness.total >= 20 && !confirm(`اعتماد ${readiness.ready} كلمة؟`)) {
       return;
     }
     startTransition(async () => {
       try {
         const outcome = await bulkApproveWithSubmittedDialects(
           selectedIds,
-          fastApproveGroup,
           publish ? "public" : "private",
           overrides,
         );
@@ -243,13 +243,51 @@ export function ReviewGrid({
             needsAttentionCount: outcome.needsAttentionCount,
           }),
         );
-        setSelected(new Set());
+        // Keep unresolved rows selected so the admin can fix or override
+        // them immediately; drop only the successfully processed ones.
+        const stillUnresolved = new Set(
+          outcome.rows
+            .filter((r) => r.status !== "approved")
+            .map((r) => r.submissionId),
+        );
+        setSelected(stillUnresolved);
+        setOverrides((prev) => {
+          const next: Record<string, string> = {};
+          for (const id of stillUnresolved) if (prev[id]) next[id] = prev[id];
+          return next;
+        });
         setPlan(null);
-        setOverrides({});
-        setFastApproveGroup("");
         router.refresh();
       } catch {
         setMessage("تعذّر تنفيذ الاعتماد. حاول مرة أخرى.");
+      }
+    });
+  }
+
+  function runClassifyOnly() {
+    if (!plan || !readiness || readiness.ready === 0) return;
+    startTransition(async () => {
+      try {
+        const outcome = await classifyWithSubmittedDialects(
+          selectedIds,
+          overrides,
+        );
+        setMessage(
+          `تم تصنيف ${outcome.approvedCount} (مسودة، غير معتمد بعد).` +
+            (outcome.needsAttentionCount > 0
+              ? ` تحتاج ${outcome.needsAttentionCount} إلى مراجعة اللهجة.`
+              : ""),
+        );
+        const stillUnresolved = new Set(
+          outcome.rows
+            .filter((r) => r.status !== "approved")
+            .map((r) => r.submissionId),
+        );
+        setSelected(stillUnresolved);
+        setPlan(null);
+        router.refresh();
+      } catch {
+        setMessage("تعذّر تنفيذ التصنيف. حاول مرة أخرى.");
       }
     });
   }
@@ -264,6 +302,10 @@ export function ReviewGrid({
         .map((link) => link.id),
     [selectedIds, rows],
   );
+
+  function rowPlanFor(submissionId: string) {
+    return plan?.rowPlans.find((r) => r.submissionId === submissionId) ?? null;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -323,133 +365,46 @@ export function ReviewGrid({
             تم تحديد {selectedIds.length} سجل
           </span>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={fastApproveGroup}
-              onChange={(e) => {
-                setFastApproveGroup(
-                  e.target.value as MainDialectGroupCode | "",
-                );
-                setOverrides({});
-              }}
-              className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
-              aria-label="المجموعة الرئيسية للاعتماد السريع"
-            >
-              <option value="">اختر المجموعة الرئيسية للاعتماد</option>
-              {Object.entries(MAIN_GROUP_LABELS).map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="button"
-              disabled={pending || !fastApproveGroup}
-              onClick={() => runFastApproval(true)}
-            >
-              اعتماد ونشر باستخدام اللهجات المدخلة
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending || !fastApproveGroup}
-              onClick={() => runFastApproval(false)}
-            >
-              اعتماد بدون نشر باستخدام اللهجات المدخلة
-            </Button>
-          </div>
-
-          {planSummary ? (
-            <div
-              role="status"
-              className="border-border bg-surface flex flex-col gap-2 rounded-lg border p-3 text-sm"
-            >
-              <p>
-                المحدد: {planSummary.total} — يعيد استخدام لهجة موجودة:{" "}
-                {planSummary.reusing} — ينشئ لهجة محلية جديدة:{" "}
-                {planSummary.creating} — بالمجموعة الرئيسية فقط:{" "}
-                {planSummary.mainGroupOnly}
-                {planSummary.overridden > 0
-                  ? ` — تم تجاوزها يدويًا: ${planSummary.overridden}`
-                  : ""}
-                {planSummary.needsAttention > 0
-                  ? ` — تحتاج مراجعة: ${planSummary.needsAttention}`
-                  : ""}
-              </p>
-              {plan
-                ? plan.rowPlans
-                    .filter(
-                      (r) =>
-                        r.kind === "needs_attention" &&
-                        !overrides[r.submissionId],
-                    )
-                    .map((r) => (
-                      <div
-                        key={r.submissionId}
-                        className="flex flex-wrap items-center gap-2"
-                      >
-                        <span className="text-danger">
-                          «{r.label}» —{" "}
-                          {r.kind === "needs_attention"
-                            ? NEEDS_ATTENTION_REASON_LABELS[r.reason]
-                            : ""}
-                        </span>
-                        <select
-                          className="border-border bg-surface min-h-8 rounded-lg border px-2 text-xs"
-                          aria-label={`تجاوز اللهجة لـ ${r.label}`}
-                          defaultValue=""
-                          onChange={(e) => {
-                            if (!e.target.value) return;
-                            setOverrides((prev) => ({
-                              ...prev,
-                              [r.submissionId]: e.target.value,
-                            }));
-                          }}
-                        >
-                          <option value="" disabled>
-                            اختر لهجة يدويًا
-                          </option>
-                          {dialects.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.name_ar}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))
-                : null}
-            </div>
+          {readiness ? (
+            <p role="status" className="text-sm font-medium">
+              {formatReadinessSummary(readiness)}
+            </p>
+          ) : plan === null && selectedIds.length > 0 ? (
+            <p className="text-foreground/60 text-sm">جارٍ تحليل التصنيف…</p>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={bulkDialect}
-              onChange={(e) => setBulkDialect(e.target.value)}
-              className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
-              aria-label="اللهجة للتصنيف فقط"
+            <Button
+              type="button"
+              disabled={!canActOnReadyRows}
+              onClick={() => runFastApproval(true)}
             >
-              <option value="">اختر اللهجة للتصنيف فقط</option>
-              {dialects.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name_ar}
-                </option>
-              ))}
-            </select>
+              اعتماد ونشر
+              {readiness && readiness.ready < readiness.total
+                ? ` (${readiness.ready})`
+                : ""}
+            </Button>
             <Button
               type="button"
               variant="secondary"
-              disabled={pending || !bulkDialect}
-              onClick={() =>
-                runBulk(
-                  () => classifySubmissions(selectedIds, bulkDialect),
-                  "تم التصنيف (مسودة، غير معتمد بعد).",
-                )
-              }
-              title="يستخدم اللهجة المختارة — تصنيف بلا اعتماد"
+              disabled={!canActOnReadyRows}
+              onClick={() => runFastApproval(false)}
+              title="يبقى معتمدًا وقابلاً للتصدير، لكن لا يظهر في أي صفحة عامة"
             >
-              تطبيق التصنيف فقط
+              اعتماد بدون نشر
+              {readiness && readiness.ready < readiness.total
+                ? ` (${readiness.ready})`
+                : ""}
             </Button>
-
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!canActOnReadyRows}
+              onClick={runClassifyOnly}
+              title="يصنّف فقط باستخدام اللهجات المدخلة — بلا اعتماد"
+            >
+              تصنيف باستخدام اللهجات المدخلة
+            </Button>
             <Button
               type="button"
               variant="danger"
@@ -478,6 +433,56 @@ export function ReviewGrid({
               تمييز كمكرر
             </Button>
           </div>
+
+          {plan
+            ? plan.rowPlans
+                .filter((r) => r.kind === "needs_attention")
+                .map((r) => {
+                  const overridden = overrides[r.submissionId];
+                  return (
+                    <div
+                      key={r.submissionId}
+                      className="flex flex-wrap items-center gap-2 text-sm"
+                    >
+                      <span
+                        className={
+                          overridden ? "text-foreground/60" : "text-danger"
+                        }
+                      >
+                        «{r.label || "بلا لهجة"}» —{" "}
+                        {overridden
+                          ? "تم تجاوزها يدويًا"
+                          : NEEDS_ATTENTION_REASON_LABELS[r.reason]}
+                      </span>
+                      <select
+                        className="border-border bg-surface min-h-8 rounded-lg border px-2 text-xs"
+                        aria-label={`اختيار لهجة يدويًا لـ ${r.label || r.submissionId}`}
+                        value={overridden ?? ""}
+                        onChange={(e) => {
+                          setOverrides((prev) => {
+                            if (!e.target.value) {
+                              const next = { ...prev };
+                              delete next[r.submissionId];
+                              return next;
+                            }
+                            return {
+                              ...prev,
+                              [r.submissionId]: e.target.value,
+                            };
+                          });
+                        }}
+                      >
+                        <option value="">اختر لهجة يدويًا</option>
+                        {dialects.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name_ar}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })
+            : null}
 
           {isApprovedView && approvedEntryIds.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -617,7 +622,7 @@ export function ReviewGrid({
         className="border-border overflow-x-auto rounded-xl border"
         dir="rtl"
       >
-        <table className="w-full min-w-[720px] border-collapse text-sm">
+        <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead>
             <tr className="border-border bg-surface-muted border-b text-right">
               <th className="w-10 resize-x overflow-hidden p-2">
@@ -633,6 +638,7 @@ export function ReviewGrid({
                 label="اللهجة المُدخلة"
                 sortKey="submitted_dialect"
               />
+              <th className="resize-x overflow-hidden p-2">التصنيف التلقائي</th>
               <th className="resize-x overflow-hidden p-2">المرادف الفصيح</th>
               <th className="resize-x overflow-hidden p-2">الحالة</th>
               <th className="resize-x overflow-hidden p-2">الظهور</th>
@@ -644,7 +650,7 @@ export function ReviewGrid({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-foreground/60 p-6 text-center">
+                <td colSpan={10} className="text-foreground/60 p-6 text-center">
                   لا توجد مساهمات مطابقة.
                 </td>
               </tr>
@@ -669,6 +675,14 @@ export function ReviewGrid({
                   </td>
                   <td className="p-2 font-medium">{row.submitted_word}</td>
                   <td className="p-2">{row.submitted_dialect}</td>
+                  <td className="p-2">
+                    <ResolvedClassificationCell
+                      selected={selected.has(row.id)}
+                      rowPlan={rowPlanFor(row.id)}
+                      override={overrides[row.id]}
+                      dialects={dialects}
+                    />
+                  </td>
                   <td className="p-2">{row.submitted_msa_synonym || "—"}</td>
                   <td className="p-2">
                     <StatusBadge status={row.review_status} />
@@ -805,6 +819,66 @@ function VisibilityBadge({
       title="معتمد — غير ظاهر للعامة"
     >
       معتمد — غير ظاهر للعامة
+    </span>
+  );
+}
+
+/**
+ * Compact per-row automatic-classification display: "مديني ← حجازي" for a
+ * resolved local dialect, a bare "نجدي" when the main group itself is the
+ * classification, and a warning state only for a genuinely unresolved row
+ * — never a blocking dropdown on every row (see WordCard/CLAUDE.md: the
+ * override is the exception, not the default path).
+ */
+function ResolvedClassificationCell({
+  selected,
+  rowPlan,
+  override,
+  dialects,
+}: {
+  selected: boolean;
+  rowPlan: {
+    kind: "trusted_local" | "main_group" | "create_local" | "needs_attention";
+    mainGroupCode?: MainDialectGroupCode;
+    label: string;
+  } | null;
+  override?: string;
+  dialects: { id: string; name_ar: string }[];
+}) {
+  if (!selected) return <span className="text-foreground/40">—</span>;
+  if (!rowPlan) return <span className="text-foreground/50 text-xs">…</span>;
+
+  if (override) {
+    const overrideLabel = dialects.find((d) => d.id === override)?.name_ar;
+    return (
+      <span className="text-foreground text-xs font-medium">
+        {overrideLabel ?? "—"} (تجاوز يدوي)
+      </span>
+    );
+  }
+
+  if (rowPlan.kind === "needs_attention") {
+    return (
+      <span className="bg-danger/10 text-danger inline-block rounded-full px-2 py-0.5 text-xs font-semibold">
+        تحتاج مراجعة
+      </span>
+    );
+  }
+
+  const groupLabel = rowPlan.mainGroupCode
+    ? MAIN_GROUP_LABELS[rowPlan.mainGroupCode]
+    : "";
+
+  if (rowPlan.kind === "main_group") {
+    return (
+      <span className="text-foreground text-xs font-medium">{groupLabel}</span>
+    );
+  }
+
+  return (
+    <span className="text-foreground text-xs font-medium">
+      {rowPlan.label} ← {groupLabel}
+      {rowPlan.kind === "create_local" ? " (جديدة)" : ""}
     </span>
   );
 }
