@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { batchReducer, initialBatchState } from "./batch-reducer";
 import { WordCard } from "./WordCard";
 import { submissionBatchSchema } from "./schema";
@@ -17,10 +18,11 @@ import { mapZodIssuesToFieldErrors } from "./field-errors";
 import {
   CONSENT_VERSION,
   MAIN_GROUP_FEMININE_LABELS,
+  MAIN_GROUP_OPTIONS,
   MAX_WORD_CARDS,
   type MainGroupCode,
 } from "./constants";
-import { formatParticipationCount } from "@/features/leaderboard/LeaderboardList";
+import { formatParticipationCount } from "@/features/leaderboard/format";
 import { notifyLeaderboardUpdated } from "@/features/leaderboard/refresh-event";
 import { Button } from "@/components/ui/Button";
 import {
@@ -107,6 +109,49 @@ export function ContributionForm({
   const firstGuidedCardRef = useRef<HTMLDivElement | null>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
   const hydrated = useRef(false);
+  const searchParams = useSearchParams();
+  const appliedDialectParam = useRef<string | null>(null);
+
+  // "#contribute" must both scroll to and move keyboard focus onto the
+  // contribution section — a same-page Link click only triggers a
+  // hashchange (no remount), a cross-page Link triggers a fresh mount with
+  // the hash already set, so both are covered by listening for both.
+  useEffect(() => {
+    function focusContributeSection() {
+      if (window.location.hash !== "#contribute") return;
+      const el = document.getElementById("contribute");
+      if (!el) return;
+      const reduceMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      el.scrollIntoView?.({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+      el.focus({ preventScroll: true });
+    }
+    focusContributeSection();
+    window.addEventListener("hashchange", focusContributeSection);
+    return () =>
+      window.removeEventListener("hashchange", focusContributeSection);
+  }, []);
+
+  // ?dialect=<code> preselects the first word card's main group — only the
+  // five known Saudi group codes are accepted, never an arbitrary database
+  // identifier, and it never overwrites a dialect the visitor already
+  // entered (see batch-reducer's PRESELECT_MAIN_GROUP guard).
+  useEffect(() => {
+    // Outside a real Next.js router context (unit tests render this
+    // component in isolation) useSearchParams() has nothing to read from.
+    if (!searchParams) return;
+    const dialectParam = searchParams.get("dialect");
+    if (!dialectParam || dialectParam === appliedDialectParam.current) return;
+    if (!isMainGroupCode(dialectParam)) return;
+    appliedDialectParam.current = dialectParam;
+    const label =
+      MAIN_GROUP_OPTIONS.find((g) => g.code === dialectParam)?.labelAr ?? "";
+    dispatch({ type: "PRESELECT_MAIN_GROUP", code: dialectParam, label });
+  }, [searchParams]);
 
   async function loadBatch(offset: number) {
     setPromptsLoading(true);
@@ -366,6 +411,7 @@ export function ContributionForm({
   return (
     <form
       id="contribute"
+      tabIndex={-1}
       onSubmit={handleSubmit}
       noValidate
       className="max-w-form mx-auto flex w-full min-w-0 scroll-mt-20 flex-col gap-6 px-4 py-6 sm:px-6"

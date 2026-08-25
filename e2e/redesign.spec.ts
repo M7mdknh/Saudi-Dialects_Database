@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("site identity and navigation", () => {
-  test("the header shows the renamed site identity and the four nav links, with an active state on the current page", async ({
+  test("the header shows the renamed site identity and exactly three primary nav links, with an active state on the current page", async ({
     page,
   }) => {
     await page.goto("/");
@@ -17,14 +17,15 @@ test.describe("site identity and navigation", () => {
     const nav = page
       .getByRole("navigation", { name: "التنقّل الرئيسي" })
       .last();
-    for (const label of [
-      "الرئيسية",
-      "ساهم بكلمة",
-      "تحدّي الكلمات",
-      "لوحة اللهجات",
-    ]) {
+    for (const label of ["الرئيسية", "تحدّي الكلمات", "لوحة اللهجات"]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
+    // ساهم بكلمة is a page action (hero CTA / #contribute anchor), not a
+    // separate primary nav destination — it must never appear as a nav tab.
+    await expect(
+      nav.getByRole("link", { name: "ساهم بكلمة" }),
+    ).not.toBeVisible();
+    await expect(nav.getByRole("link")).toHaveCount(3);
     await expect(nav.getByRole("link", { name: "الرئيسية" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -72,7 +73,7 @@ test.describe("homepage leaderboard preview", () => {
   }) => {
     await page.goto("/");
     await page
-      .getByRole("heading", { name: "أي لهجة جمعت مساهمات أكثر؟" })
+      .getByRole("heading", { name: "أي لهجة تتصدر قاموسنا؟" })
       .scrollIntoViewIfNeeded();
     for (const label of ["حجازي", "نجدي", "شرقاوي", "شمالي", "جنوبي"]) {
       await expect(
@@ -193,5 +194,58 @@ test.describe("guided prompt card simplification", () => {
     test.skip(!hasCards, "No guided prompts available.");
 
     await expect(page.getByText("أضف كلمتك").first()).toBeVisible();
+  });
+});
+
+test.describe("?dialect= preselection and #contribute focus", () => {
+  test("navigating with a valid group code preselects the dialect and focuses the contribution section", async ({
+    page,
+  }) => {
+    await page.goto("/?dialect=najdi#contribute");
+    await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue(
+      "نجدي",
+    );
+    await expect(page.locator("#contribute")).toBeFocused();
+  });
+
+  test("an invalid dialect code is ignored, leaving the field empty", async ({
+    page,
+  }) => {
+    await page.goto("/?dialect=not-a-real-group#contribute");
+    await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue("");
+  });
+});
+
+test.describe("leaderboard podium responsiveness", () => {
+  test("the podium reflows to a single-column mobile layout with no duplicated group names", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const response = await page.goto("/leaderboard");
+    test.skip(
+      !(response && response.ok()),
+      "Leaderboard backend not reachable in this environment.",
+    );
+    // One <li> per group — the redesign must reflow via CSS (order/col-span)
+    // rather than rendering a parallel mobile/desktop DOM tree, which would
+    // double every name for assistive tech and break exact-text queries.
+    await expect(page.getByText("حجازي", { exact: true })).toHaveCount(1);
+  });
+
+  test("the desktop podium centers the leader without duplicating content", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const response = await page.goto("/leaderboard");
+    test.skip(
+      !(response && response.ok()),
+      "Leaderboard backend not reachable in this environment.",
+    );
+    await expect(page.getByText("حجازي", { exact: true })).toHaveCount(1);
+    const [scrollWidth, clientWidth] = await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.clientWidth,
+    ]);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
   });
 });

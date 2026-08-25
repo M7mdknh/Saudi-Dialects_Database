@@ -52,6 +52,7 @@ export type BatchAction =
       clientId: string;
       value: string;
     }
+  | { type: "PRESELECT_MAIN_GROUP"; code: string; label: string }
   | { type: "ADD_EXAMPLE"; clientId: string }
   | { type: "REMOVE_EXAMPLE"; clientId: string; index: number }
   | { type: "UPDATE_EXAMPLE"; clientId: string; index: number; value: string }
@@ -157,6 +158,26 @@ export function batchReducer(
               }
             : w,
         ),
+      };
+    }
+    case "PRESELECT_MAIN_GROUP": {
+      // Only touches the first (base) card, and only while it's still
+      // pristine — never overwrites a dialect the visitor already
+      // typed/chose, or a restored draft's own selection.
+      const [firstWord, ...restWords] = state.words;
+      if (!firstWord || firstWord.dialect) return state;
+      return {
+        ...state,
+        words: [
+          {
+            ...firstWord,
+            dialect: action.label,
+            dialectId: null,
+            provisionalMainGroupCode:
+              action.code as WordCardInput["provisionalMainGroupCode"],
+          },
+          ...restWords,
+        ],
       };
     }
     case "ADD_EXAMPLE": {

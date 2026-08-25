@@ -1,41 +1,38 @@
-import Link from "next/link";
 import { getDialectLeaderboard } from "@/features/leaderboard/actions";
-import { LeaderboardList } from "@/features/leaderboard/LeaderboardList";
+import { LeaderboardSection } from "@/features/leaderboard/LeaderboardSection";
 
-export const revalidate = 60;
+// Always dynamic (matches the homepage's own leaderboard preview): the read
+// goes through createSupabaseServerClient, which reads cookies(), so an ISR
+// revalidate window would otherwise make Next attempt static prerendering
+// first, hit Next's internal dynamic-API bailout, and log a misleading
+// "failed" message before correctly falling back to dynamic rendering.
+export const revalidate = 0;
 
 export const metadata = {
-  title: "لوحة الصدارة | لهجات",
+  title: "لوحة صدارة اللهجات | لهجات",
 };
 
 export default async function LeaderboardPage() {
-  const entries = await getDialectLeaderboard();
+  // A real RPC failure must show a distinct Arabic retry state (see
+  // LeaderboardSection), not a crashed page or a silently empty result.
+  let initialEntries;
+  try {
+    initialEntries = await getDialectLeaderboard();
+  } catch (error) {
+    console.error("leaderboard_page_initial_load_failed", {
+      message: (error as Error).message,
+    });
+    initialEntries = null;
+  }
 
   return (
-    <main className="max-w-shell mx-auto flex w-full flex-col gap-6 px-4 py-8 sm:px-6">
-      <header className="flex flex-col gap-2 text-center">
-        <h1 className="text-foreground text-2xl font-bold">
-          أي لهجة جمعت مساهمات أكثر؟
-        </h1>
-        <p className="text-foreground/70">
-          كل كلمة ترسلها تضيف نقطة للهجتك، ولا تظهر الكلمات للعامة إلا بعد
-          المراجعة.
-        </p>
-      </header>
+    <main className="max-w-shell mx-auto flex w-full flex-col gap-8 px-4 py-8 sm:px-6">
+      <LeaderboardSection initialEntries={initialEntries} variant="full" />
 
-      <LeaderboardList entries={entries} />
-
-      <div className="flex flex-col items-center gap-2 pt-2 text-center">
-        <p className="text-foreground/60 text-sm">
-          تقدر تساهم بكلمة من لهجتك وترفع ترتيبها.
-        </p>
-        <Link
-          href="/"
-          className="bg-accent text-accent-foreground rounded-xl px-4 py-2.5 text-sm font-semibold hover:opacity-90"
-        >
-          ساهم بكلمة الآن
-        </Link>
-      </div>
+      <p className="text-foreground/60 max-w-reading mx-auto text-center text-sm">
+        يُحتسب رصيد كل لهجة من عدد المساهمات الموثوقة فور استلامها، بينما تظهر
+        الكلمات في القاموس العام بعد اعتمادها من فريق المراجعة فقط.
+      </p>
     </main>
   );
 }

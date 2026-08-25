@@ -22,6 +22,11 @@ vi.mock("./dialects-actions", () => ({
   listPublicDialects: (...args: unknown[]) => listPublicDialectsMock(...args),
 }));
 
+let mockSearchParams = new URLSearchParams();
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => mockSearchParams,
+}));
+
 const { ContributionForm } = await import("./ContributionForm");
 
 const ricePrompt: GuidedPromptRecord = {
@@ -71,10 +76,12 @@ const dialectOptions: PublicDialectOption[] = [
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
+  window.location.hash = "";
   listReferencePromptsPageMock.mockReset();
   listReferencePromptsPageMock.mockResolvedValue(page([]));
   listPublicDialectsMock.mockReset();
   listPublicDialectsMock.mockResolvedValue([]);
+  mockSearchParams = new URLSearchParams();
 });
 
 afterEach(() => {
@@ -460,5 +467,55 @@ describe("ContributionForm Turnstile gating", () => {
     expect(
       screen.getByRole("button", { name: "إرسال المساهمة" }),
     ).toBeDisabled();
+  });
+});
+
+describe("ContributionForm ?dialect= preselection", () => {
+  it("preselects a valid main-group code into the first card's dialect field", () => {
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("حجازي");
+  });
+
+  it("ignores an invalid dialect query parameter (not one of the five group codes)", () => {
+    mockSearchParams = new URLSearchParams("dialect=DROP TABLE dialects");
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("");
+  });
+
+  it("ignores a syntactically-valid-looking but unlisted code, and a raw database id", () => {
+    mockSearchParams = new URLSearchParams(
+      "dialect=11111111-1111-4111-8111-111111111111",
+    );
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("");
+  });
+});
+
+describe("ContributionForm #contribute focus", () => {
+  it("moves focus to the contribution section when the hash is already present on mount", () => {
+    window.location.hash = "#contribute";
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(document.getElementById("contribute")).toHaveFocus();
   });
 });

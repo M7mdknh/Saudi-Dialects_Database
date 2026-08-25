@@ -140,4 +140,50 @@ describe("batchReducer", () => {
     const state = initialBatchState();
     expect(state.words[0].referencePromptId).toBeNull();
   });
+
+  describe("PRESELECT_MAIN_GROUP", () => {
+    it("sets the first card's dialect label and provisional group, with no dialectId", () => {
+      const state = initialBatchState();
+      const next = batchReducer(state, {
+        type: "PRESELECT_MAIN_GROUP",
+        code: "hijazi",
+        label: "حجازي",
+      });
+      expect(next.words[0].dialect).toBe("حجازي");
+      expect(next.words[0].dialectId).toBeNull();
+      expect(next.words[0].provisionalMainGroupCode).toBe("hijazi");
+    });
+
+    it("never overwrites a dialect the visitor already typed or chose", () => {
+      let state = initialBatchState();
+      state = batchReducer(state, {
+        type: "UPDATE_DIALECT",
+        clientId: state.words[0].clientId,
+        dialect: "جداوي",
+        dialectId: "11111111-1111-4111-8111-111111111111",
+      });
+      const next = batchReducer(state, {
+        type: "PRESELECT_MAIN_GROUP",
+        code: "najdi",
+        label: "نجدي",
+      });
+      expect(next.words[0].dialect).toBe("جداوي");
+      expect(next.words[0].dialectId).toBe(
+        "11111111-1111-4111-8111-111111111111",
+      );
+    });
+
+    it("only touches the first card, leaving additional cards untouched", () => {
+      let state = initialBatchState();
+      state = batchReducer(state, { type: "ADD_WORD" });
+      const secondClientId = state.words[1].clientId;
+      const next = batchReducer(state, {
+        type: "PRESELECT_MAIN_GROUP",
+        code: "eastern",
+        label: "شرقاوي",
+      });
+      expect(next.words[1].clientId).toBe(secondClientId);
+      expect(next.words[1].dialect).toBe("");
+    });
+  });
 });

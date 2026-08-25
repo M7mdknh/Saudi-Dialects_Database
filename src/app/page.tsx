@@ -72,7 +72,10 @@ export default async function HomePage() {
         initialPrompts={initialPrompts}
         initialDialectOptions={initialDialectOptions}
       />
-      <LeaderboardSection initialEntries={initialLeaderboard} />
+      <LeaderboardSection
+        initialEntries={initialLeaderboard}
+        variant="compact"
+      />
     </div>
   );
 }

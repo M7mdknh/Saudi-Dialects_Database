@@ -6,16 +6,11 @@ import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "الرئيسية" },
-  { href: "/#contribute", label: "ساهم بكلمة" },
   { href: "/prompts", label: "تحدّي الكلمات" },
   { href: "/leaderboard", label: "لوحة اللهجات" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  // A hash link (e.g. "/#contribute") is an in-page action, not a distinct
-  // destination page, so it never claims the "current page" state — only
-  // الرئيسية should be active for "/".
-  if (href.includes("#")) return false;
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }

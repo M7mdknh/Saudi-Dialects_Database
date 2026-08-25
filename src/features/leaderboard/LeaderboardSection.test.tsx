@@ -51,14 +51,18 @@ const FIVE_GROUPS: LeaderboardEntry[] = [
 
 describe("LeaderboardSection (homepage preview)", () => {
   it("shows all five main groups even when four have zero participation", () => {
-    render(<LeaderboardSection initialEntries={FIVE_GROUPS} />);
+    render(
+      <LeaderboardSection initialEntries={FIVE_GROUPS} variant="compact" />,
+    );
     for (const label of ["حجازي", "نجدي", "شرقاوي", "شمالي", "جنوبي"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
 
   it("links to the full leaderboard page", () => {
-    render(<LeaderboardSection initialEntries={FIVE_GROUPS} />);
+    render(
+      <LeaderboardSection initialEntries={FIVE_GROUPS} variant="compact" />,
+    );
     const link = screen.getByRole("link", { name: "عرض لوحة اللهجات" });
     expect(link).toHaveAttribute("href", "/leaderboard");
   });
@@ -66,7 +70,7 @@ describe("LeaderboardSection (homepage preview)", () => {
   it("shows a distinct retry state instead of hiding the section when the initial load failed", async () => {
     getDialectLeaderboardMock.mockResolvedValueOnce(FIVE_GROUPS);
     const user = userEvent.setup();
-    render(<LeaderboardSection initialEntries={null} />);
+    render(<LeaderboardSection initialEntries={null} variant="compact" />);
 
     expect(
       screen.getByText("تعذّر تحميل لوحة الصدارة الآن."),
@@ -81,7 +85,9 @@ describe("LeaderboardSection (homepage preview)", () => {
       { ...FIVE_GROUPS[0], submissionCount: 4 },
       ...FIVE_GROUPS.slice(1),
     ]);
-    render(<LeaderboardSection initialEntries={FIVE_GROUPS} />);
+    render(
+      <LeaderboardSection initialEntries={FIVE_GROUPS} variant="compact" />,
+    );
     expect(screen.getByText("٣ مساهمات")).toBeInTheDocument();
 
     const { notifyLeaderboardUpdated } = await import("./refresh-event");
@@ -90,5 +96,59 @@ describe("LeaderboardSection (homepage preview)", () => {
     await waitFor(() =>
       expect(screen.getByText("٤ مساهمات")).toBeInTheDocument(),
     );
+  });
+
+  it("announces the change through an accessible live region after a refresh increases a count", async () => {
+    getDialectLeaderboardMock.mockResolvedValueOnce([
+      { ...FIVE_GROUPS[0], submissionCount: 6 },
+      ...FIVE_GROUPS.slice(1),
+    ]);
+    render(
+      <LeaderboardSection initialEntries={FIVE_GROUPS} variant="compact" />,
+    );
+
+    const { notifyLeaderboardUpdated } = await import("./refresh-event");
+    notifyLeaderboardUpdated();
+
+    await waitFor(() => {
+      const status = document.querySelector('[aria-live="polite"]');
+      expect(status?.textContent).toContain("حجازي");
+      expect(status?.textContent).toMatch(/أُضيف/);
+    });
+  });
+
+  it("does not announce or highlight anything when a refresh reports no change", async () => {
+    getDialectLeaderboardMock.mockResolvedValueOnce(FIVE_GROUPS);
+    render(
+      <LeaderboardSection initialEntries={FIVE_GROUPS} variant="compact" />,
+    );
+
+    const { notifyLeaderboardUpdated } = await import("./refresh-event");
+    notifyLeaderboardUpdated();
+
+    await waitFor(() => expect(getDialectLeaderboardMock).toHaveBeenCalled());
+    const status = document.querySelector('[aria-live="polite"]');
+    expect(status?.textContent ?? "").toBe("");
+  });
+});
+
+describe("LeaderboardSection (full page)", () => {
+  it("shows the full-page heading and aggregate statistics", () => {
+    render(<LeaderboardSection initialEntries={FIVE_GROUPS} variant="full" />);
+    expect(
+      screen.getByRole("heading", { name: "لوحة صدارة اللهجات" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("إجمالي المساهمات")).toBeInTheDocument();
+    expect(screen.getByText("الكلمات المعتمدة")).toBeInTheDocument();
+  });
+
+  it("uses distinct call-to-action copy from the homepage preview", () => {
+    render(<LeaderboardSection initialEntries={FIVE_GROUPS} variant="full" />);
+    expect(
+      screen.getByRole("link", { name: "أضف نقطة للهجتك" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "عرض لوحة اللهجات" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -192,7 +192,7 @@ export function DialectExplorer({
 
       <div className="flex justify-center pt-2">
         <Link
-          href="/"
+          href={`/?dialect=${mainGroupCode}#contribute`}
           className="bg-accent text-accent-foreground rounded-xl px-4 py-2.5 text-sm font-semibold hover:opacity-90"
         >
           ساهم بكلمة من هذه اللهجة

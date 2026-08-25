@@ -12,7 +12,7 @@ test.describe("participation leaderboard", () => {
     await page.goto("/");
 
     const heading = page.getByRole("heading", {
-      name: "أي لهجة جمعت مساهمات أكثر؟",
+      name: "أي لهجة تتصدر قاموسنا؟",
     });
     const reachable = await heading.isVisible().catch(() => false);
     test.skip(

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatApprovedCount,
-  formatParticipationCount,
-} from "./LeaderboardList";
+import { formatApprovedCount, formatParticipationCount } from "./format";
 
 describe("formatParticipationCount (Arabic singular/dual/plural agreement)", () => {
   it("uses the compact digit+singular form for zero", () => {

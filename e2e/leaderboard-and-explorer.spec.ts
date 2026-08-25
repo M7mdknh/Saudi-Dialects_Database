@@ -20,7 +20,7 @@ test.describe("public leaderboard and dialect explorer", () => {
     );
 
     await expect(
-      page.getByRole("heading", { name: "أي لهجة جمعت مساهمات أكثر؟" }),
+      page.getByRole("heading", { name: "لوحة صدارة اللهجات" }),
     ).toBeVisible();
     for (const label of ["حجازي", "نجدي", "شرقاوي", "شمالي", "جنوبي"]) {
       await expect(page.getByText(label, { exact: true })).toBeVisible();

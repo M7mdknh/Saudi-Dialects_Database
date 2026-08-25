@@ -13,6 +13,10 @@
   --accent-foreground: #ffffff;
   --gold: #b6902f;
   --gold-foreground: #2f2508;
+  --silver: #8a97a0;
+  --silver-foreground: #1c2226;
+  --bronze: #a9713d;
+  --bronze-foreground: #2c1c0c;
   --border: #e2dbc9;
   --danger: #a8281f;
   --success: #14794f;
@@ -34,6 +38,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
+  --color-silver: var(--silver);
+  --color-silver-foreground: var(--silver-foreground);
+  --color-bronze: var(--bronze);
+  --color-bronze-foreground: var(--bronze-foreground);
   --color-border: var(--border);
   --color-danger: var(--danger);
   --color-success: var(--success);
@@ -66,6 +74,10 @@
     --accent-foreground: #0a1a12;
     --gold: #d8b45c;
     --gold-foreground: #2b2107;
+    --silver: #aab6bd;
+    --silver-foreground: #171c1f;
+    --bronze: #c58a52;
+    --bronze-foreground: #241605;
     --border: #33402f;
     --danger: #ff8a80;
     --success: #5fce9f;
