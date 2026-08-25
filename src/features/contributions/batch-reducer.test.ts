@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { batchReducer, initialBatchState } from "./batch-reducer";
 import { MAX_WORD_CARDS } from "./constants";
+import type { GuidedPromptRecord } from "@/features/prompts/types";
+
+const samplePrompt: GuidedPromptRecord = {
+  id: "rice",
+  category: "food_staples",
+  categoryLabelAr: "الطعام والشراب اليومي",
+  msaLemma: "أرز",
+  definitionAr: "حبوب مطبوخة تُقدّم طعامًا رئيسيًا",
+  scenarioAr: "ما الكلمة التي تستخدمها عادة للأرز المطبوخ؟",
+  partOfSpeech: "noun",
+  answerForm: "word_or_phrase",
+  priority: 90,
+  promptVersion: 1,
+};
 
 describe("batchReducer", () => {
   it("starts with exactly one word card and no consent", () => {
@@ -57,5 +71,73 @@ describe("batchReducer", () => {
     expect(state.words[0].examples).toHaveLength(2);
     state = batchReducer(state, { type: "REMOVE_EXAMPLE", clientId, index: 1 });
     expect(state.words[0].examples).toHaveLength(1);
+  });
+
+  it("ADD_GUIDED_WORD prefills the synonym and meaning, leaves word/dialect empty", () => {
+    const state = batchReducer(initialBatchState(), {
+      type: "ADD_GUIDED_WORD",
+      prompt: samplePrompt,
+    });
+    const card = state.words[state.words.length - 1];
+    expect(card.msaSynonym).toBe("أرز");
+    expect(card.explanation).toBe("حبوب مطبوخة تُقدّم طعامًا رئيسيًا");
+    expect(card.word).toBe("");
+    expect(card.dialect).toBe("");
+    expect(card.referencePromptId).toBe("rice");
+    expect(card.referencePromptSnapshot?.msaLemma).toBe("أرز");
+  });
+
+  it("UPDATE_WORD ignores attempts to edit the read-only guided fields", () => {
+    let state = batchReducer(initialBatchState(), {
+      type: "ADD_GUIDED_WORD",
+      prompt: samplePrompt,
+    });
+    const clientId = state.words[state.words.length - 1].clientId;
+    state = batchReducer(state, {
+      type: "UPDATE_WORD",
+      clientId,
+      field: "msaSynonym",
+      value: "متلاعب به",
+    });
+    const card = state.words.find((w) => w.clientId === clientId)!;
+    expect(card.msaSynonym).toBe("أرز");
+  });
+
+  it("UPDATE_WORD still allows editing the dialect word on a guided card", () => {
+    let state = batchReducer(initialBatchState(), {
+      type: "ADD_GUIDED_WORD",
+      prompt: samplePrompt,
+    });
+    const clientId = state.words[state.words.length - 1].clientId;
+    state = batchReducer(state, {
+      type: "UPDATE_WORD",
+      clientId,
+      field: "word",
+      value: "عيش",
+    });
+    const card = state.words.find((w) => w.clientId === clientId)!;
+    expect(card.word).toBe("عيش");
+  });
+
+  it("ADD_ANOTHER_FOR_SAME_PROMPT inserts a second card for the same concept right after the first", () => {
+    let state = batchReducer(initialBatchState(), {
+      type: "ADD_GUIDED_WORD",
+      prompt: samplePrompt,
+    });
+    const clientId = state.words[state.words.length - 1].clientId;
+    state = batchReducer(state, {
+      type: "ADD_ANOTHER_FOR_SAME_PROMPT",
+      clientId,
+    });
+    const index = state.words.findIndex((w) => w.clientId === clientId);
+    expect(state.words[index + 1].referencePromptId).toBe("rice");
+    expect(state.words[index + 1].msaSynonym).toBe("أرز");
+    expect(state.words[index + 1].word).toBe("");
+    expect(state.words[index + 1].clientId).not.toBe(clientId);
+  });
+
+  it("ordinary (non-guided) cards keep referencePromptId null", () => {
+    const state = initialBatchState();
+    expect(state.words[0].referencePromptId).toBeNull();
   });
 });

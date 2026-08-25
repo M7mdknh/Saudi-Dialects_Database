@@ -57,7 +57,7 @@ test.describe("public contribution journey", () => {
     await page.getByRole("button", { name: "إرسال المساهمة" }).click();
 
     await expect(
-      page.getByRole("heading", { name: "تم إرسال مساهمتك بنجاح" }),
+      page.getByRole("heading", { name: "وصلتنا مساهمتك، وشكراً لك!" }),
     ).toBeVisible();
   });
 

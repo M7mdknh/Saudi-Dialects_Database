@@ -210,6 +210,8 @@ export interface UpsertCanonicalInput {
   msaSynonyms: string[];
   explanation: string;
   editorialStatus: "draft" | "approved" | "retired";
+  /** Only where semantically correct — set from the source raw submission's own link, never forced. */
+  referencePromptId?: string | null;
 }
 
 export async function upsertCanonicalEntry(input: UpsertCanonicalInput) {
@@ -226,6 +228,7 @@ export async function upsertCanonicalEntry(input: UpsertCanonicalInput) {
       p_canonical_msa_synonyms: input.msaSynonyms,
       p_canonical_explanation: input.explanation,
       p_editorial_status: input.editorialStatus,
+      p_reference_prompt_id: input.referencePromptId ?? null,
     })
     .single();
   if (error) throw error;
@@ -244,6 +247,7 @@ export interface MergeInput {
     sourceRawExampleId: string | null;
     position: number;
   }[];
+  referencePromptId?: string | null;
 }
 
 export async function mergeSubmissions(input: MergeInput) {
@@ -264,6 +268,7 @@ export async function mergeSubmissions(input: MergeInput) {
       sourceRawExampleId: e.sourceRawExampleId,
       position: e.position,
     })),
+    p_reference_prompt_id: input.referencePromptId ?? null,
   });
   if (error) throw error;
   return data as string;

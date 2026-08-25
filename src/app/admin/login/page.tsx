@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center gap-6 px-4">
+    <main className="mx-auto flex min-h-[70vh] w-full max-w-sm flex-col justify-center gap-6 px-4">
       <h1 className="text-center text-xl font-bold">تسجيل دخول المشرفين</h1>
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         {error ? (

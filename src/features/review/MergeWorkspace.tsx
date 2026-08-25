@@ -18,6 +18,7 @@ interface SubmissionRow {
   submitted_msa_synonym: string;
   submitted_explanation: string | null;
   raw_examples: ExampleRow[];
+  reference_prompt_id: string | null;
 }
 
 interface DialectOption {
@@ -79,6 +80,9 @@ export function MergeWorkspace({
           msaSynonyms: [msaSynonym],
           explanation,
           examples,
+          referencePromptId:
+            submissions.find((s) => s.reference_prompt_id)
+              ?.reference_prompt_id ?? null,
         });
         router.push("/admin");
         router.refresh();
@@ -89,7 +93,7 @@ export function MergeWorkspace({
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <h1 className="text-xl font-bold">مساحة الدمج</h1>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

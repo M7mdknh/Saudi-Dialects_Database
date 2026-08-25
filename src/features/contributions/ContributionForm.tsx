@@ -17,13 +17,23 @@ import { mapZodIssuesToFieldErrors } from "./field-errors";
 import { CONSENT_VERSION, MAX_WORD_CARDS } from "./constants";
 import { Button } from "@/components/ui/Button";
 import { Turnstile } from "./Turnstile";
+import { GuidedPromptRail } from "@/features/prompts/GuidedPromptRail";
+import { getGuidedPrompts } from "@/features/prompts/actions";
+import {
+  getExclusionIds,
+  recordAnsweredId,
+  recordShownIds,
+} from "@/features/prompts/prompt-history";
+import type { GuidedPromptRecord } from "@/features/prompts/types";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
 export function ContributionForm({
   turnstileSiteKey,
+  initialPrompts,
 }: {
   turnstileSiteKey?: string;
+  initialPrompts: GuidedPromptRecord[];
 }) {
   const [state, dispatch] = useReducer(
     batchReducer,
@@ -37,8 +47,11 @@ export function ContributionForm({
   >({});
   const [draftRestored, setDraftRestored] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string>();
+  const [prompts, setPrompts] = useState(initialPrompts);
+  const [promptsLoading, setPromptsLoading] = useState(false);
   const idempotencyKey = useRef<string>("");
   const firstErrorRef = useRef<HTMLDivElement | null>(null);
+  const firstGuidedCardRef = useRef<HTMLDivElement | null>(null);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -46,6 +59,7 @@ export function ContributionForm({
     // hydrate form state; this is not derivable via a useState initializer
     // without a server/client hydration mismatch.
     idempotencyKey.current = getOrCreateIdempotencyKey();
+    recordShownIds(initialPrompts.map((p) => p.id));
     const draft = loadDraft();
     if (draft && draft.words.length > 0) {
       dispatch({
@@ -57,6 +71,7 @@ export function ContributionForm({
       setDraftRestored(true);
     }
     hydrated.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -66,7 +81,7 @@ export function ContributionForm({
 
   useEffect(() => {
     if (Object.keys(fieldErrors).length > 0 && firstErrorRef.current) {
-      firstErrorRef.current.scrollIntoView({
+      firstErrorRef.current.scrollIntoView?.({
         block: "center",
         behavior: "smooth",
       });
@@ -74,6 +89,33 @@ export function ContributionForm({
       if (input instanceof HTMLElement) input.focus();
     }
   }, [fieldErrors]);
+
+  async function refreshPrompts() {
+    setPromptsLoading(true);
+    try {
+      const next = await getGuidedPrompts(getExclusionIds());
+      setPrompts(next);
+      recordShownIds(next.map((p) => p.id));
+    } catch {
+      // Non-fatal: the guided rail simply stays empty/stale; ordinary
+      // contribution still works.
+    } finally {
+      setPromptsLoading(false);
+    }
+  }
+
+  function chooseGuidedPrompt(prompt: GuidedPromptRecord) {
+    dispatch({ type: "ADD_GUIDED_WORD", prompt });
+    requestAnimationFrame(() => {
+      firstGuidedCardRef.current?.scrollIntoView?.({
+        block: "center",
+        behavior: "smooth",
+      });
+      const input =
+        firstGuidedCardRef.current?.querySelector<HTMLInputElement>("input");
+      input?.focus();
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,9 +142,13 @@ export function ContributionForm({
     setStatus("submitting");
     const result = await submitBatch(parsed.data);
     if (result.ok) {
+      for (const word of state.words) {
+        if (word.referencePromptId) recordAnsweredId(word.referencePromptId);
+      }
       clearDraft();
       rotateIdempotencyKey();
       setStatus("success");
+      void refreshPrompts();
       return;
     }
 
@@ -119,29 +165,45 @@ export function ContributionForm({
     setDraftRestored(false);
   }
 
+  function startAnotherWithPrompt(prompt: GuidedPromptRecord) {
+    startAnother();
+    dispatch({ type: "ADD_GUIDED_WORD", prompt });
+  }
+
   if (status === "success") {
     return (
-      <div className="border-border bg-surface mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border p-8 text-center">
-        <h1 className="text-success text-xl font-bold">
-          تم إرسال مساهمتك بنجاح
-        </h1>
-        <p className="text-foreground/80">
-          شكراً لمساهمتك! سيراجع فريقنا الكلمات قبل إضافتها إلى مجموعة البيانات.
-        </p>
-        <Button type="button" onClick={startAnother}>
-          إرسال مساهمة أخرى
-        </Button>
+      <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-8 sm:px-6">
+        <div className="border-success/30 bg-success/5 flex flex-col items-center gap-3 rounded-2xl border p-8 text-center">
+          <h1 className="text-success text-xl font-bold">
+            وصلتنا مساهمتك، وشكراً لك!
+          </h1>
+          <p className="text-foreground/80">
+            سيراجع فريقنا الكلمة قبل إضافتها إلى مجموعة بيانات لهجات. تقدر تكمّل
+            بمساهمة ثانية الحين.
+          </p>
+          <Button type="button" onClick={startAnother}>
+            إرسال مساهمة أخرى
+          </Button>
+        </div>
+        <GuidedPromptRail
+          prompts={prompts}
+          loading={promptsLoading}
+          onChoose={startAnotherWithPrompt}
+        />
       </div>
     );
   }
 
   const disableAdd = state.words.length >= MAX_WORD_CARDS;
+  const firstGuidedClientId = state.words.find(
+    (w) => w.referencePromptId,
+  )?.clientId;
 
   return (
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6"
+      className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-6 sm:px-6"
     >
       <header className="flex flex-col gap-2 text-center">
         <h1 className="text-foreground text-2xl font-bold">
@@ -151,6 +213,12 @@ export function ContributionForm({
           ساعدنا في بناء بيانات تفهم تنوّع لهجاتنا العربية.
         </p>
       </header>
+
+      <GuidedPromptRail
+        prompts={prompts}
+        loading={promptsLoading}
+        onChoose={chooseGuidedPrompt}
+      />
 
       {draftRestored ? (
         <p
@@ -173,10 +241,14 @@ export function ContributionForm({
       <div className="flex flex-col gap-4">
         {state.words.map((card, index) => {
           const cardErrors = fieldErrors[String(index)];
+          const isFirstGuided = card.clientId === firstGuidedClientId;
           return (
             <div
               key={card.clientId}
-              ref={index === 0 && cardErrors ? firstErrorRef : undefined}
+              ref={(el) => {
+                if (index === 0 && cardErrors) firstErrorRef.current = el;
+                if (isFirstGuided) firstGuidedCardRef.current = el;
+              }}
             >
               <WordCard
                 index={index}
@@ -226,6 +298,15 @@ export function ContributionForm({
                     clientId: card.clientId,
                     direction: "down",
                   })
+                }
+                onAddAnotherForSamePrompt={
+                  card.referencePromptId
+                    ? () =>
+                        dispatch({
+                          type: "ADD_ANOTHER_FOR_SAME_PROMPT",
+                          clientId: card.clientId,
+                        })
+                    : undefined
                 }
               />
             </div>

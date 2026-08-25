@@ -5,6 +5,16 @@ import {
   MAX_WORD_CARDS,
 } from "./constants";
 
+export const referencePromptSnapshotSchema = z.object({
+  msaLemma: z.string().min(1),
+  definitionAr: z.string().min(1),
+  scenarioAr: z.string().min(1),
+  category: z.string().min(1),
+  categoryLabelAr: z.string().min(1),
+  promptVersion: z.number().int().min(1),
+  capturedAt: z.string(),
+});
+
 export const exampleSchema = z.object({
   sentence: z
     .string()
@@ -46,6 +56,8 @@ export const wordCardSchema = z.object({
     .array(exampleSchema)
     .min(1, "أضف مثالاً واحداً على الأقل")
     .max(MAX_EXAMPLES_PER_WORD, `الحد الأقصى ${MAX_EXAMPLES_PER_WORD} أمثلة`),
+  referencePromptId: z.string().min(1).nullable().optional(),
+  referencePromptSnapshot: referencePromptSnapshotSchema.nullable().optional(),
 });
 
 export const submissionBatchSchema = z.object({

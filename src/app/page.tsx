@@ -1,7 +1,16 @@
 import { ContributionForm } from "@/features/contributions/ContributionForm";
+import { getGuidedPrompts } from "@/features/prompts/actions";
 import { getPublicEnv } from "@/lib/env";
 
-export default function HomePage() {
+export const revalidate = 0;
+
+export default async function HomePage() {
   const { NEXT_PUBLIC_TURNSTILE_SITE_KEY } = getPublicEnv();
-  return <ContributionForm turnstileSiteKey={NEXT_PUBLIC_TURNSTILE_SITE_KEY} />;
+  const initialPrompts = await getGuidedPrompts([]).catch(() => []);
+  return (
+    <ContributionForm
+      turnstileSiteKey={NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+      initialPrompts={initialPrompts}
+    />
+  );
 }

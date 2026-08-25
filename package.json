@@ -12,7 +12,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "data:guided-prompts:check": "node scripts/build-guided-prompts.mjs --check",
+    "data:guided-prompts:build": "node scripts/build-guided-prompts.mjs",
+    "data:guided-prompts:seed": "node scripts/generate-reference-prompts-seed.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

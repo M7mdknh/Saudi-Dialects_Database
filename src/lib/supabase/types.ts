@@ -14,6 +14,9 @@ export type SourceRelation = "primary" | "merged" | "supporting";
 
 export type ExportFormat = "json" | "jsonl";
 
+export type MainDialectGroupCode =
+  "hijazi" | "najdi" | "eastern" | "northern" | "southern";
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -44,6 +47,8 @@ export interface Database {
         dialect_search_key: string;
         review_status: ReviewStatus;
         position: number;
+        reference_prompt_id: string | null;
+        reference_prompt_snapshot: unknown;
         created_at: string;
         updated_at: string;
       }>;
@@ -60,6 +65,7 @@ export interface Database {
         name_ar: string;
         slug: string;
         parent_id: string | null;
+        main_group_code: MainDialectGroupCode | null;
         is_active: boolean;
         created_at: string;
         updated_at: string;
@@ -84,6 +90,7 @@ export interface Database {
         version: number;
         approved_by: string | null;
         approved_at: string | null;
+        reference_prompt_id: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -124,6 +131,22 @@ export interface Database {
         user_id: string;
         is_active: boolean;
         created_at: string;
+      }>;
+      reference_prompts: Table<{
+        id: string;
+        category: string;
+        category_label_ar: string;
+        msa_lemma: string;
+        definition_ar: string;
+        scenario_ar: string;
+        part_of_speech: string;
+        answer_form: string;
+        priority: number;
+        prompt_version: number;
+        is_active: boolean;
+        dataset_schema_version: number;
+        created_at: string;
+        updated_at: string;
       }>;
       exports: Table<{
         id: string;
@@ -180,6 +203,7 @@ export interface Database {
           p_canonical_msa_synonyms: string[];
           p_canonical_explanation: string;
           p_editorial_status: string;
+          p_reference_prompt_id?: string | null;
         };
         Returns: { id: string; version: number; stale: boolean }[];
       };
@@ -194,6 +218,7 @@ export interface Database {
           p_canonical_msa_synonyms: string[];
           p_canonical_explanation: string;
           p_examples: unknown;
+          p_reference_prompt_id?: string | null;
         };
         Returns: string;
       };
@@ -247,6 +272,74 @@ export interface Database {
           p_checksum: string;
         };
         Returns: Database["public"]["Tables"]["exports"]["Row"];
+      };
+      list_active_reference_prompts: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          category: string;
+          category_label_ar: string;
+          msa_lemma: string;
+          definition_ar: string;
+          scenario_ar: string;
+          part_of_speech: string;
+          answer_form: string;
+          priority: number;
+          prompt_version: number;
+        }[];
+      };
+      public_dialect_leaderboard: {
+        Args: Record<string, never>;
+        Returns: {
+          main_group_code: MainDialectGroupCode;
+          main_group_label_ar: string;
+          approved_word_count: number;
+        }[];
+      };
+      public_dialect_words: {
+        Args: {
+          p_main_group_code?: MainDialectGroupCode | null;
+          p_search?: string | null;
+          p_category?: string | null;
+          p_sort?: string | null;
+          p_limit?: number | null;
+          p_offset?: number | null;
+        };
+        Returns: {
+          id: string;
+          canonical_word: string;
+          canonical_msa_synonyms: string[];
+          canonical_explanation: string | null;
+          local_dialect_label: string;
+          main_group_code: MainDialectGroupCode | null;
+          main_group_label_ar: string | null;
+          category: string | null;
+          category_label_ar: string | null;
+          examples: { sentence: string }[];
+          updated_at: string;
+          total_count: number;
+        }[];
+      };
+      upsert_reference_prompt: {
+        Args: {
+          p_actor: string;
+          p_id: string;
+          p_expected_prompt_version: number | null;
+          p_category: string;
+          p_category_label_ar: string;
+          p_msa_lemma: string;
+          p_definition_ar: string;
+          p_scenario_ar: string;
+          p_part_of_speech: string;
+          p_answer_form: string;
+          p_priority: number;
+          p_is_active: boolean;
+        };
+        Returns: { id: string; prompt_version: number; stale: boolean }[];
+      };
+      reference_prompt_submission_counts: {
+        Args: { p_actor: string };
+        Returns: { reference_prompt_id: string; submission_count: number }[];
       };
     };
     Enums: Record<string, never>;

@@ -14,6 +14,12 @@ export default function AdminLayout({
         </Link>
         <nav className="flex items-center gap-3">
           <Link
+            href="/admin/prompts"
+            className="text-sm font-semibold hover:underline"
+          >
+            المعاني المقترحة
+          </Link>
+          <Link
             href="/admin/exports"
             className="text-sm font-semibold hover:underline"
           >

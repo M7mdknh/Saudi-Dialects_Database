@@ -1,0 +1,1762 @@
+{
+  "schema_version": 2,
+  "scope": "Saudi Arabia",
+  "category_defaults": {
+    "answer_form": "word_or_phrase",
+    "prompt_version": 1,
+    "is_active": true
+  },
+  "categories": [
+    {
+      "id": "food_staples",
+      "label_ar": "الطعام والشراب اليومي",
+      "coverage_tags": ["all_saudi", "daily_life"],
+      "prompts": [
+        {
+          "id": "rice",
+          "msa_lemma": "أرز",
+          "definition_ar": "حبوب مطبوخة تُقدّم طعامًا رئيسيًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها عادة للأرز المطبوخ الذي يُقدّم مع الطعام؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "bread",
+          "msa_lemma": "خبز",
+          "definition_ar": "طعام مصنوع من الدقيق والماء ويُخبز",
+          "scenario_ar": "ما الكلمة التي تستخدمها للخبز الذي تأكله مع الوجبة؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "breakfast",
+          "msa_lemma": "فطور",
+          "definition_ar": "الوجبة الأولى في اليوم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوجبة التي تتناولها في الصباح؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "lunch",
+          "msa_lemma": "غداء",
+          "definition_ar": "وجبة منتصف اليوم أو بعد الظهر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوجبة الرئيسية في منتصف اليوم؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "dinner",
+          "msa_lemma": "عشاء",
+          "definition_ar": "وجبة المساء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوجبة التي تتناولها في المساء؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "milk",
+          "msa_lemma": "حليب",
+          "definition_ar": "سائل أبيض يُشرب ويُنتج من الحيوانات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للحليب الذي يُشرب؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "yogurt",
+          "msa_lemma": "لبن رائب",
+          "definition_ar": "حليب متخمر يُشرب أو يؤكل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للحليب المتخمر الذي يكون حامضًا قليلًا؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "dates-fruit",
+          "msa_lemma": "تمر",
+          "definition_ar": "ثمر النخيل الناضج",
+          "scenario_ar": "ما الكلمة التي تستخدمها لثمر النخيل الجاهز للأكل؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "coffee-drink",
+          "msa_lemma": "قهوة",
+          "definition_ar": "شراب يُحضّر من حبوب البن",
+          "scenario_ar": "ما الكلمة التي تستخدمها للقهوة التي تقدمها للضيف؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "tea-drink",
+          "msa_lemma": "شاي",
+          "definition_ar": "شراب ساخن يُحضّر من أوراق الشاي",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشاي عندما تعرضه على شخص؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "sugar",
+          "msa_lemma": "سكر",
+          "definition_ar": "مادة حلوة تُضاف إلى الطعام والشراب",
+          "scenario_ar": "ما الكلمة التي تستخدمها للسكر الذي تضيفه إلى الشاي؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "salt",
+          "msa_lemma": "ملح",
+          "definition_ar": "مادة مالحة تُضاف إلى الطعام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للملح الذي تضيفه أثناء الطبخ؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        }
+      ]
+    },
+    {
+      "id": "cooking_utensils",
+      "label_ar": "الطبخ وأدوات المطبخ",
+      "coverage_tags": ["all_saudi", "home"],
+      "prompts": [
+        {
+          "id": "cooking-pot",
+          "msa_lemma": "قِدر",
+          "definition_ar": "وعاء عميق يُطبخ فيه الطعام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الكبير الذي تطبخ فيه الطعام؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "frying-pan",
+          "msa_lemma": "مقلاة",
+          "definition_ar": "وعاء مسطح يُستخدم للقلي",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الذي تقلي فيه البيض أو الطعام؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "kettle",
+          "msa_lemma": "غلاية",
+          "definition_ar": "وعاء أو جهاز يُغلى فيه الماء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشيء الذي تغلي فيه الماء للشاي؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "cup",
+          "msa_lemma": "فنجان",
+          "definition_ar": "وعاء صغير للشرب",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الصغير الذي تُقدّم فيه القهوة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "drinking-glass",
+          "msa_lemma": "كوب",
+          "definition_ar": "وعاء يُستخدم لشرب الماء والعصير",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الذي تشرب فيه الماء؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "spoon",
+          "msa_lemma": "ملعقة",
+          "definition_ar": "أداة للأكل أو تحريك الطعام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأداة التي تأكل بها الحساء؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "fork",
+          "msa_lemma": "شوكة طعام",
+          "definition_ar": "أداة ذات أسنان تُستخدم للأكل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأداة ذات الأسنان التي تأكل بها؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "kitchen-knife",
+          "msa_lemma": "سكين",
+          "definition_ar": "أداة حادة للقطع",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأداة التي تقطع بها الخضار؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "food-plate",
+          "msa_lemma": "صحن",
+          "definition_ar": "وعاء مسطح يُقدّم فيه الطعام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الذي تضع فيه الطعام عند الأكل؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "serving-bowl",
+          "msa_lemma": "وعاء عميق",
+          "definition_ar": "إناء عميق يوضع فيه الطعام أو الحساء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للإناء العميق الذي تضع فيه الحساء أو السلطة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "cooking-stove",
+          "msa_lemma": "موقد",
+          "definition_ar": "جهاز يُطبخ عليه الطعام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجهاز الذي تضع عليه القدر للطبخ؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "oven",
+          "msa_lemma": "فرن",
+          "definition_ar": "جهاز مغلق للخبز أو الطهي بالحرارة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجهاز الذي تخبز فيه الخبز أو الكعك؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        }
+      ]
+    },
+    {
+      "id": "clothing_personal",
+      "label_ar": "الملابس والأغراض الشخصية",
+      "coverage_tags": ["all_saudi", "daily_life"],
+      "prompts": [
+        {
+          "id": "thobe",
+          "msa_lemma": "ثوب رجالي",
+          "definition_ar": "لباس رجالي طويل شائع في السعودية",
+          "scenario_ar": "ما الكلمة التي تستخدمها للباس الرجالي الطويل المعتاد؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "womens-dress",
+          "msa_lemma": "فستان",
+          "definition_ar": "لباس نسائي من قطعة واحدة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للباس النسائي الطويل من قطعة واحدة؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "head-cover",
+          "msa_lemma": "غطاء الرأس",
+          "definition_ar": "قطعة لباس تُوضع على الرأس",
+          "scenario_ar": "ما التعبير العام الذي تستخدمه لقطعة القماش التي تغطي الرأس؟",
+          "part_of_speech": "noun_phrase",
+          "priority": 80
+        },
+        {
+          "id": "shoe",
+          "msa_lemma": "حذاء",
+          "definition_ar": "ما يُلبس في القدم خارج المنزل",
+          "scenario_ar": "ما الكلمة التي تستخدمها لما تلبسه في قدمك عند الخروج؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "sandal",
+          "msa_lemma": "نعل مفتوح",
+          "definition_ar": "حذاء خفيف مكشوف جزئيًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها للحذاء الخفيف المفتوح الذي يُلبس خارج البيت؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "socks",
+          "msa_lemma": "جوارب",
+          "definition_ar": "لباس رقيق يغطي القدم",
+          "scenario_ar": "ما الكلمة التي تستخدمها لما تلبسه في القدم داخل الحذاء؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "jacket",
+          "msa_lemma": "سترة",
+          "definition_ar": "قطعة لباس خارجية للجزء العلوي",
+          "scenario_ar": "ما الكلمة التي تستخدمها للقطعة التي ترتديها فوق ملابسك عند البرد؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "trousers",
+          "msa_lemma": "سروال",
+          "definition_ar": "لباس يغطي الساقين منفصلتين",
+          "scenario_ar": "ما الكلمة التي تستخدمها للباس الذي يغطي الساقين؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "shirt",
+          "msa_lemma": "قميص",
+          "definition_ar": "لباس للجزء العلوي من الجسم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للقميص الذي تلبسه على الجزء العلوي؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "pocket",
+          "msa_lemma": "جيب",
+          "definition_ar": "جزء مخيط في الملابس لحفظ أشياء صغيرة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الصغير في ملابسك الذي تضع فيه المفاتيح؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "clothes-button",
+          "msa_lemma": "زر",
+          "definition_ar": "قطعة صغيرة تُستخدم لإغلاق الملابس",
+          "scenario_ar": "ما الكلمة التي تستخدمها للقطعة الصغيرة التي تغلق بها القميص؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "towel",
+          "msa_lemma": "منشفة",
+          "definition_ar": "قطعة قماش لتجفيف الجسم أو اليدين",
+          "scenario_ar": "ما الكلمة التي تستخدمها لقطعة القماش التي تجفف بها جسمك بعد الاستحمام؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "body_health",
+      "label_ar": "الجسم والصحة",
+      "coverage_tags": ["all_saudi", "health"],
+      "prompts": [
+        {
+          "id": "head-body",
+          "msa_lemma": "رأس",
+          "definition_ar": "الجزء الأعلى من الجسم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجزء الأعلى من جسم الإنسان؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "face",
+          "msa_lemma": "وجه",
+          "definition_ar": "الجزء الأمامي من الرأس",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجزء الذي فيه العينان والأنف والفم؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "mouth",
+          "msa_lemma": "فم",
+          "definition_ar": "عضو الأكل والكلام في الوجه",
+          "scenario_ar": "ما الكلمة التي تستخدمها للعضو الذي تأكل وتتحدث به؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "hand",
+          "msa_lemma": "يد",
+          "definition_ar": "طرف الجسم من الكتف إلى الأصابع أو جزء منه",
+          "scenario_ar": "ما الكلمة التي تستخدمها ليد الإنسان في كلامك اليومي؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "leg",
+          "msa_lemma": "ساق",
+          "definition_ar": "طرف الجسم المستخدم للمشي",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجزء من الجسم الذي تمشي به؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "belly",
+          "msa_lemma": "بطن",
+          "definition_ar": "الجزء الأمامي الأوسط من الجسم",
+          "scenario_ar": "ما الكلمة التي تستخدمها لبطن الإنسان في كلامك اليومي؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "pain",
+          "msa_lemma": "ألم",
+          "definition_ar": "إحساس جسدي مؤذٍ",
+          "scenario_ar": "ماذا تقول عندما تشعر بألم في جزء من جسمك؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "wound",
+          "msa_lemma": "جرح",
+          "definition_ar": "إصابة يحدث فيها قطع أو أذى للجلد",
+          "scenario_ar": "ما الكلمة التي تستخدمها لإصابة في الجلد تنزف أو تؤلم؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "common-cold",
+          "msa_lemma": "زكام",
+          "definition_ar": "مرض خفيف يصيب الأنف والحلق",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يكون أنفك مسدودًا وتعطس بسبب مرض خفيف؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "medicine",
+          "msa_lemma": "دواء",
+          "definition_ar": "مادة تُستخدم للعلاج",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشيء الذي تأخذه لعلاج المرض؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "clinic",
+          "msa_lemma": "عيادة",
+          "definition_ar": "مكان صغير لفحص المرضى وعلاجهم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تذهب إليه لفحصك عند الطبيب؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "dizzy",
+          "msa_lemma": "مصاب بالدوار",
+          "definition_ar": "الشعور بأن الرأس أو المكان يدور",
+          "scenario_ar": "ماذا تقول عن نفسك عندما تشعر أن المكان يدور حولك؟",
+          "part_of_speech": "adjective_or_phrase",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "kinship",
+      "label_ar": "العائلة والقرابة",
+      "coverage_tags": ["all_saudi", "family"],
+      "prompts": [
+        {
+          "id": "mother",
+          "msa_lemma": "أم",
+          "definition_ar": "الوالدة",
+          "scenario_ar": "ما الكلمة التي تنادي بها والدتك عادة؟",
+          "part_of_speech": "kinship_term",
+          "priority": 100
+        },
+        {
+          "id": "father",
+          "msa_lemma": "أب",
+          "definition_ar": "الوالد",
+          "scenario_ar": "ما الكلمة التي تنادي بها والدك عادة؟",
+          "part_of_speech": "kinship_term",
+          "priority": 100
+        },
+        {
+          "id": "grandmother",
+          "msa_lemma": "جدة",
+          "definition_ar": "أم الأب أو أم الأم",
+          "scenario_ar": "ما الكلمة التي تنادي بها أم والدك أو أم والدتك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 100
+        },
+        {
+          "id": "grandfather",
+          "msa_lemma": "جد",
+          "definition_ar": "أب الأب أو أب الأم",
+          "scenario_ar": "ما الكلمة التي تنادي بها أب والدك أو أب والدتك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 100
+        },
+        {
+          "id": "paternal-uncle",
+          "msa_lemma": "عم",
+          "definition_ar": "أخو الأب",
+          "scenario_ar": "ما الكلمة التي تستخدمها لأخي والدك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "maternal-uncle",
+          "msa_lemma": "خال",
+          "definition_ar": "أخو الأم",
+          "scenario_ar": "ما الكلمة التي تستخدمها لأخي والدتك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "paternal-aunt",
+          "msa_lemma": "عمة",
+          "definition_ar": "أخت الأب",
+          "scenario_ar": "ما الكلمة التي تستخدمها لأخت والدك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "maternal-aunt",
+          "msa_lemma": "خالة",
+          "definition_ar": "أخت الأم",
+          "scenario_ar": "ما الكلمة التي تستخدمها لأخت والدتك؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "older-brother",
+          "msa_lemma": "أخ أكبر",
+          "definition_ar": "الأخ الذي يزيد عمره على المتكلم",
+          "scenario_ar": "ما التعبير الذي تستخدمه لأخيك الأكبر منك سنًا؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "older-sister",
+          "msa_lemma": "أخت أكبر",
+          "definition_ar": "الأخت التي يزيد عمرها على المتكلم",
+          "scenario_ar": "ما التعبير الذي تستخدمه لأختك الأكبر منك سنًا؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "husband",
+          "msa_lemma": "زوج",
+          "definition_ar": "الرجل المتزوج بالنسبة لزوجته",
+          "scenario_ar": "ما الكلمة التي تستخدمها المرأة عادة عندما تتحدث عن زوجها؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        },
+        {
+          "id": "wife",
+          "msa_lemma": "زوجة",
+          "definition_ar": "المرأة المتزوجة بالنسبة لزوجها",
+          "scenario_ar": "ما الكلمة التي يستخدمها الرجل عادة عندما يتحدث عن زوجته؟",
+          "part_of_speech": "kinship_term",
+          "priority": 90
+        }
+      ]
+    },
+    {
+      "id": "work_school",
+      "label_ar": "العمل والدراسة",
+      "coverage_tags": ["all_saudi", "modern_life"],
+      "prompts": [
+        {
+          "id": "school",
+          "msa_lemma": "مدرسة",
+          "definition_ar": "مكان التعليم قبل الجامعة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي يذهب إليه الأطفال للدراسة؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "teacher",
+          "msa_lemma": "معلم",
+          "definition_ar": "شخص يدرّس الطلاب",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشخص الذي يشرح الدروس للطلاب؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "student",
+          "msa_lemma": "طالب",
+          "definition_ar": "شخص يدرس في مدرسة أو جامعة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشخص الذي يدرس ويتلقى الدروس؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "homework",
+          "msa_lemma": "واجب منزلي",
+          "definition_ar": "عمل دراسي يُنجز خارج الصف",
+          "scenario_ar": "ما الكلمة التي تستخدمها للعمل الذي يطلب المعلم إنجازه في البيت؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "exam",
+          "msa_lemma": "اختبار",
+          "definition_ar": "تقييم لمعرفة مستوى التعلم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتقييم الذي تجيب فيه عن أسئلة دراسية؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "pen",
+          "msa_lemma": "قلم",
+          "definition_ar": "أداة للكتابة بالحبر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأداة التي تكتب بها على الورق؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "notebook",
+          "msa_lemma": "دفتر",
+          "definition_ar": "أوراق مجمعة للكتابة",
+          "scenario_ar": "ما الكلمة التي تستخدمها لمجموعة الأوراق التي تكتب فيها الدروس؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "work-office",
+          "msa_lemma": "مكتب العمل",
+          "definition_ar": "مكان إداري يعمل فيه الموظفون",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تذهب إليه لأداء عملك الإداري؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "manager",
+          "msa_lemma": "مدير",
+          "definition_ar": "الشخص المسؤول عن إدارة العمل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشخص المسؤول عن الموظفين في العمل؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "salary",
+          "msa_lemma": "راتب",
+          "definition_ar": "مبلغ دوري يُدفع مقابل العمل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمال الذي تستلمه كل شهر مقابل عملك؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "vacation",
+          "msa_lemma": "إجازة",
+          "definition_ar": "مدة توقف عن العمل أو الدراسة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأيام التي لا تذهب فيها إلى العمل أو الدراسة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "short-break",
+          "msa_lemma": "استراحة",
+          "definition_ar": "توقف قصير للراحة أثناء العمل أو الدراسة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتوقف القصير بين فترتين من العمل أو الدراسة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "shopping_money",
+      "label_ar": "التسوق والمال",
+      "coverage_tags": ["all_saudi", "daily_life"],
+      "prompts": [
+        {
+          "id": "small-shop",
+          "msa_lemma": "متجر صغير",
+          "definition_ar": "مكان صغير تُباع فيه السلع اليومية",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمحل الصغير الذي تشتري منه حاجاتك اليومية؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "market",
+          "msa_lemma": "سوق",
+          "definition_ar": "مكان يجتمع فيه البائعون والمشترون",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تذهب إليه لشراء أشياء متعددة؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "price",
+          "msa_lemma": "سعر",
+          "definition_ar": "قيمة الشيء بالمال",
+          "scenario_ar": "ماذا تسمي المبلغ المطلوب لشراء شيء؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "expensive",
+          "msa_lemma": "غالي الثمن",
+          "definition_ar": "ذو سعر مرتفع",
+          "scenario_ar": "ماذا تقول عن شيء سعره أعلى مما تتوقع؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "cheap",
+          "msa_lemma": "رخيص",
+          "definition_ar": "ذو سعر منخفض",
+          "scenario_ar": "ماذا تقول عن شيء سعره منخفض؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "discount",
+          "msa_lemma": "تخفيض",
+          "definition_ar": "نقص في السعر المعتاد",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يقلل المتجر سعر السلعة؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "receipt-bill",
+          "msa_lemma": "فاتورة",
+          "definition_ar": "بيان بالمبلغ المطلوب أو المدفوع",
+          "scenario_ar": "ما الكلمة التي تستخدمها للورقة التي توضح ما اشتريته والمبلغ؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "cash",
+          "msa_lemma": "نقدًا",
+          "definition_ar": "الدفع بأوراق أو قطع نقدية",
+          "scenario_ar": "ماذا تقول عندما ستدفع بالمال الموجود في يدك لا بالبطاقة؟",
+          "part_of_speech": "adverb_or_noun",
+          "priority": 90
+        },
+        {
+          "id": "change-money",
+          "msa_lemma": "باقي النقود",
+          "definition_ar": "المال الذي يعيده البائع بعد الدفع",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمال الذي يرجعه لك البائع بعد أن تدفع أكثر من السعر؟",
+          "part_of_speech": "noun_phrase",
+          "priority": 100
+        },
+        {
+          "id": "borrow",
+          "msa_lemma": "استعار",
+          "definition_ar": "أخذ شيئًا مؤقتًا مع نية إعادته",
+          "scenario_ar": "ماذا تقول عندما تأخذ من شخص شيئًا لتعيده إليه لاحقًا؟",
+          "part_of_speech": "verb",
+          "priority": 100
+        },
+        {
+          "id": "lend",
+          "msa_lemma": "أعار",
+          "definition_ar": "أعطى شيئًا مؤقتًا ليسترده لاحقًا",
+          "scenario_ar": "ماذا تقول عندما تعطي شخصًا شيئًا ليعيده إليك لاحقًا؟",
+          "part_of_speech": "verb",
+          "priority": 100
+        },
+        {
+          "id": "debt",
+          "msa_lemma": "دَين",
+          "definition_ar": "مال أو حق يجب سداده",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمال الذي يجب على شخص أن يعيده لغيره؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        }
+      ]
+    },
+    {
+      "id": "transport_roads",
+      "label_ar": "المواصلات والطرق",
+      "coverage_tags": ["all_saudi", "urban", "travel"],
+      "prompts": [
+        {
+          "id": "car",
+          "msa_lemma": "سيارة",
+          "definition_ar": "مركبة صغيرة تسير على الطريق",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمركبة التي تقودها في الطريق؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "bus",
+          "msa_lemma": "حافلة",
+          "definition_ar": "مركبة كبيرة تنقل عددًا من الركاب",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمركبة الكبيرة التي تنقل مجموعة من الناس؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "taxi",
+          "msa_lemma": "سيارة أجرة",
+          "definition_ar": "سيارة تنقل الركاب مقابل المال",
+          "scenario_ar": "ما الكلمة التي تستخدمها للسيارة التي تدفع لها لتوصلك؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "road",
+          "msa_lemma": "طريق",
+          "definition_ar": "مسار تنتقل عليه المركبات بين الأماكن",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمسار الذي تسير عليه السيارة بين المدن أو الأحياء؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "street",
+          "msa_lemma": "شارع",
+          "definition_ar": "طريق داخل مدينة أو حي",
+          "scenario_ar": "ما الكلمة التي تستخدمها للطريق الموجود بين البيوت والمحلات داخل الحي؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "traffic-jam",
+          "msa_lemma": "ازدحام مروري",
+          "definition_ar": "بطء أو توقف حركة السيارات بسبب كثرتها",
+          "scenario_ar": "ماذا تقول عندما تكون السيارات كثيرة والطريق لا يتحرك؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "intersection",
+          "msa_lemma": "تقاطع طرق",
+          "definition_ar": "مكان تلتقي فيه عدة طرق",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي يلتقي فيه شارعين أو أكثر؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "roundabout",
+          "msa_lemma": "ميدان دائري",
+          "definition_ar": "تقاطع دائري تدور فيه السيارات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتقاطع الدائري الذي تدور حوله السيارات؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "car-stop",
+          "msa_lemma": "توقف",
+          "definition_ar": "إيقاف السيارة عن الحركة",
+          "scenario_ar": "ماذا تقول للسائق عندما تريد منه أن يوقف السيارة؟",
+          "part_of_speech": "verb_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "parking-place",
+          "msa_lemma": "موقف سيارات",
+          "definition_ar": "مكان تُترك فيه السيارة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تضع فيه السيارة عند وصولك؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "fuel",
+          "msa_lemma": "وقود",
+          "definition_ar": "مادة تُستخدم لتشغيل المركبة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمادة التي تضعها في السيارة لتسير؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "car-tire",
+          "msa_lemma": "إطار السيارة",
+          "definition_ar": "الجزء المطاطي الدائري الذي تسير عليه المركبة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجزء المطاطي الدائري في عجلة السيارة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "places_services",
+      "label_ar": "الأماكن والخدمات",
+      "coverage_tags": ["all_saudi", "daily_life"],
+      "prompts": [
+        {
+          "id": "home-house",
+          "msa_lemma": "منزل",
+          "definition_ar": "مكان إقامة الإنسان وعائلته",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تسكن فيه مع عائلتك؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "mosque",
+          "msa_lemma": "مسجد",
+          "definition_ar": "مكان أداء الصلاة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي يذهب إليه الناس للصلاة؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "hospital-place",
+          "msa_lemma": "مستشفى",
+          "definition_ar": "مكان كبير لعلاج المرضى",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي يُنقل إليه المريض للعلاج؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "pharmacy",
+          "msa_lemma": "صيدلية",
+          "definition_ar": "مكان بيع الأدوية",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمحل الذي تشتري منه الدواء؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "restaurant",
+          "msa_lemma": "مطعم",
+          "definition_ar": "مكان إعداد الطعام وبيعه للزبائن",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تذهب إليه لتأكل طعامًا جاهزًا؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "grocery-store",
+          "msa_lemma": "بقالة",
+          "definition_ar": "متجر صغير للمواد الغذائية والحاجات اليومية",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمحل القريب الذي يبيع الطعام والحاجات اليومية؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "bakery",
+          "msa_lemma": "مخبز",
+          "definition_ar": "مكان صنع الخبز وبيعه",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي يصنع ويبيع الخبز؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "barber-shop",
+          "msa_lemma": "صالون حلاقة",
+          "definition_ar": "مكان قص الشعر والعناية به",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تذهب إليه لقص شعرك؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "repair-workshop",
+          "msa_lemma": "ورشة إصلاح",
+          "definition_ar": "مكان إصلاح السيارات أو الآلات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تأخذ إليه السيارة لإصلاحها؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "farm-place",
+          "msa_lemma": "مزرعة",
+          "definition_ar": "أرض للزراعة أو تربية الحيوانات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأرض التي تُزرع أو تُربى فيها الحيوانات؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "beach",
+          "msa_lemma": "شاطئ",
+          "definition_ar": "الأرض المحاذية للبحر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الرملي أو الصخري بجانب البحر؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "mountain",
+          "msa_lemma": "جبل",
+          "definition_ar": "مرتفع طبيعي كبير من الأرض",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمرتفع الطبيعي الكبير من الأرض؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        }
+      ]
+    },
+    {
+      "id": "weather_nature",
+      "label_ar": "الطقس والطبيعة",
+      "coverage_tags": ["all_saudi", "environment"],
+      "prompts": [
+        {
+          "id": "sun",
+          "msa_lemma": "شمس",
+          "definition_ar": "النجم الذي يضيء الأرض نهارًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشمس في كلامك اليومي؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "rain",
+          "msa_lemma": "مطر",
+          "definition_ar": "ماء ينزل من السحاب",
+          "scenario_ar": "ما الكلمة التي تستخدمها للماء الذي ينزل من السماء؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "wind",
+          "msa_lemma": "رياح",
+          "definition_ar": "حركة الهواء في الخارج",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يتحرك الهواء بقوة في الخارج؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "dust",
+          "msa_lemma": "غبار",
+          "definition_ar": "ذرات تراب دقيقة تنتشر في الهواء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتراب الدقيق الذي ترفعه الريح؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "cloud",
+          "msa_lemma": "سحابة",
+          "definition_ar": "كتلة مرئية من بخار الماء في السماء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للكتلة التي تظهر في السماء وقد ينزل منها المطر؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "hot-weather",
+          "msa_lemma": "حر شديد",
+          "definition_ar": "ارتفاع كبير في حرارة الجو",
+          "scenario_ar": "ماذا تقول عندما تكون حرارة الجو مرتفعة جدًا؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "cold-weather",
+          "msa_lemma": "برد شديد",
+          "definition_ar": "انخفاض كبير في حرارة الجو",
+          "scenario_ar": "ماذا تقول عندما تكون حرارة الجو منخفضة جدًا؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "humidity",
+          "msa_lemma": "رطوبة",
+          "definition_ar": "وجود بخار ماء كثير في الهواء",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يكون الهواء رطبًا ويلتصق العرق بالجسم؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "shade",
+          "msa_lemma": "ظل",
+          "definition_ar": "مكان محجوب عن أشعة الشمس",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان الذي تجلس فيه بعيدًا عن أشعة الشمس؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "flash-flood",
+          "msa_lemma": "سيل",
+          "definition_ar": "ماء كثير يجري بعد المطر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للماء الكثير الذي يجري في الأودية والشوارع بعد المطر؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "thunder",
+          "msa_lemma": "رعد",
+          "definition_ar": "الصوت القوي المصاحب للعاصفة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للصوت القوي الذي تسمعه أثناء المطر؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "lightning",
+          "msa_lemma": "برق",
+          "definition_ar": "ضوء سريع يظهر في السماء أثناء العاصفة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للضوء السريع الذي يظهر في السماء وقت المطر؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        }
+      ]
+    },
+    {
+      "id": "agriculture_livestock",
+      "label_ar": "الزراعة والحيوانات",
+      "coverage_tags": ["rural", "all_saudi", "heritage"],
+      "prompts": [
+        {
+          "id": "camel",
+          "msa_lemma": "جمل",
+          "definition_ar": "حيوان كبير من الإبل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجمل البالغ في كلامك اليومي؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "sheep",
+          "msa_lemma": "خروف",
+          "definition_ar": "حيوان من الضأن يُربى للحمه وصوفه",
+          "scenario_ar": "ما الكلمة التي تستخدمها للخروف أو الشاة من الضأن؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "goat",
+          "msa_lemma": "ماعز",
+          "definition_ar": "حيوان داجن ذو شعر وقرون غالبًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها لحيوان الماعز؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "cow",
+          "msa_lemma": "بقرة",
+          "definition_ar": "حيوان داجن كبير يُربى للحليب واللحم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للبقرة في كلامك اليومي؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "chicken",
+          "msa_lemma": "دجاجة",
+          "definition_ar": "طائر داجن يُربى للبيض واللحم",
+          "scenario_ar": "ما الكلمة التي تستخدمها للدجاجة التي تُربى في البيت أو المزرعة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "animal-herd",
+          "msa_lemma": "قطيع",
+          "definition_ar": "مجموعة من الحيوانات تسير أو ترعى معًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها لمجموعة الغنم أو الإبل عندما تكون معًا؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "animal-pen",
+          "msa_lemma": "حظيرة",
+          "definition_ar": "مكان مسوّر تُحفظ فيه الحيوانات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمكان المسور الذي توضع فيه الأغنام أو الماشية؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "crop-field",
+          "msa_lemma": "حقل",
+          "definition_ar": "أرض مزروعة بمحصول",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأرض التي زُرعت بمحصول؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "water-well",
+          "msa_lemma": "بئر",
+          "definition_ar": "حفرة عميقة يُستخرج منها الماء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للحفرة العميقة التي يُستخرج منها الماء؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "palm-tree",
+          "msa_lemma": "نخلة",
+          "definition_ar": "شجرة تنتج التمر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشجرة التي تنتج التمر؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "harvest",
+          "msa_lemma": "حصاد",
+          "definition_ar": "جمع المحصول بعد نضجه",
+          "scenario_ar": "ما الكلمة التي تستخدمها لوقت أو عمل جمع الزرع بعد نضجه؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "animal-feed",
+          "msa_lemma": "علف",
+          "definition_ar": "طعام يُقدّم للحيوانات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للطعام الذي يُعطى للغنم أو الإبل؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "desert_outdoors",
+      "label_ar": "البر والرحلات",
+      "coverage_tags": ["all_saudi", "heritage", "outdoors"],
+      "prompts": [
+        {
+          "id": "desert",
+          "msa_lemma": "صحراء",
+          "definition_ar": "أرض واسعة قليلة المطر والنبات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأرض الصحراوية المفتوحة خارج المدن؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "sand",
+          "msa_lemma": "رمل",
+          "definition_ar": "حبيبات صخرية دقيقة تغطي الأرض",
+          "scenario_ar": "ما الكلمة التي تستخدمها للحبيبات الدقيقة التي تغطي الأرض الصحراوية؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "sand-dune",
+          "msa_lemma": "كثيب رملي",
+          "definition_ar": "مرتفع من الرمل صنعته الرياح",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتلة التي تتكون من الرمل؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "tent",
+          "msa_lemma": "خيمة",
+          "definition_ar": "مسكن مؤقت من القماش أو الشعر",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمسكن المؤقت الذي يُنصب في البر؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "firewood",
+          "msa_lemma": "حطب",
+          "definition_ar": "خشب جاف يُستخدم لإشعال النار",
+          "scenario_ar": "ما الكلمة التي تستخدمها للخشب الذي تجمعه لإشعال النار؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "campfire",
+          "msa_lemma": "نار المخيم",
+          "definition_ar": "نار تُشعل في مكان الرحلة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للنار التي تشعلها في البر للدفء أو الطبخ؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "camping-trip",
+          "msa_lemma": "رحلة برية",
+          "definition_ar": "خروج للإقامة أو التنزه في البر",
+          "scenario_ar": "ما الكلمة أو التعبير الذي تستخدمه عندما تخرج مع أهلك أو أصحابك للجلوس في البر؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "valley",
+          "msa_lemma": "وادٍ",
+          "definition_ar": "منخفض طبيعي بين المرتفعات يجري فيه الماء أحيانًا",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمنخفض الطويل بين الجبال أو التلال؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "small-hill",
+          "msa_lemma": "تل",
+          "definition_ar": "مرتفع طبيعي صغير من الأرض",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمرتفع الصغير من الأرض؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "rocky-ground",
+          "msa_lemma": "أرض صخرية",
+          "definition_ar": "أرض تكثر فيها الحجارة والصخور",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأرض القاسية التي تغطيها الحجارة؟",
+          "part_of_speech": "noun_phrase",
+          "priority": 100
+        },
+        {
+          "id": "water-container",
+          "msa_lemma": "وعاء ماء للرحلة",
+          "definition_ar": "وعاء يُحمل فيه الماء خارج المنزل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الذي تحمل فيه الماء إلى البر؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "lantern",
+          "msa_lemma": "مصباح محمول",
+          "definition_ar": "ضوء محمول يُستخدم في الظلام",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمصباح الذي تحمله أو تضعه في المخيم ليلًا؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "technology",
+      "label_ar": "التقنية والتواصل الحديث",
+      "coverage_tags": ["all_saudi", "modern_life"],
+      "prompts": [
+        {
+          "id": "mobile-phone",
+          "msa_lemma": "هاتف محمول",
+          "definition_ar": "جهاز محمول للاتصال واستخدام التطبيقات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للجهاز الذي تتصل به وتستخدم فيه التطبيقات؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "phone-charger",
+          "msa_lemma": "شاحن الهاتف",
+          "definition_ar": "جهاز أو سلك يمد الهاتف بالطاقة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشيء الذي توصل به الهاتف ليشحن؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "text-message",
+          "msa_lemma": "رسالة نصية",
+          "definition_ar": "نص قصير يُرسل عبر الهاتف",
+          "scenario_ar": "ما الكلمة التي تستخدمها للنص الذي ترسله لشخص عبر الهاتف؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "phone-call",
+          "msa_lemma": "مكالمة",
+          "definition_ar": "اتصال صوتي عبر الهاتف",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما تتحدث مع شخص عبر الهاتف؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "internet",
+          "msa_lemma": "الإنترنت",
+          "definition_ar": "الشبكة العالمية للاتصال والمعلومات",
+          "scenario_ar": "ما الكلمة التي تستخدمها للخدمة التي تربط هاتفك ومحاسبك بالمواقع والتطبيقات؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "mobile-signal",
+          "msa_lemma": "إشارة الشبكة",
+          "definition_ar": "قوة اتصال الهاتف بشبكة الاتصالات",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يكون اتصال الهاتف بالشبكة ضعيفًا أو منقطعًا؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "password",
+          "msa_lemma": "كلمة مرور",
+          "definition_ar": "رمز سري للدخول إلى حساب أو جهاز",
+          "scenario_ar": "ما الكلمة التي تستخدمها للرمز السري الذي تكتبه لفتح حسابك؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "photo",
+          "msa_lemma": "صورة",
+          "definition_ar": "لقطة ثابتة تُلتقط بالكاميرا",
+          "scenario_ar": "ما الكلمة التي تستخدمها للقطة التي تلتقطها بكاميرا الهاتف؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "video",
+          "msa_lemma": "مقطع مرئي",
+          "definition_ar": "تسجيل متحرك بالصوت أو بدونه",
+          "scenario_ar": "ما الكلمة التي تستخدمها للتسجيل المتحرك الذي تصوره بالهاتف؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "shared-location",
+          "msa_lemma": "موقع جغرافي مرسل",
+          "definition_ar": "مكان يُشارك رقميًا مع شخص",
+          "scenario_ar": "ما الكلمة أو العبارة التي تستخدمها عندما ترسل لشخص مكانك على الخريطة؟",
+          "part_of_speech": "noun_or_phrase",
+          "priority": 100
+        },
+        {
+          "id": "mobile-app",
+          "msa_lemma": "تطبيق",
+          "definition_ar": "برنامج يعمل على الهاتف",
+          "scenario_ar": "ما الكلمة التي تستخدمها للبرنامج الذي تثبته وتفتحه في هاتفك؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "device-not-working",
+          "msa_lemma": "لا يعمل",
+          "definition_ar": "توقف جهاز أو خدمة عن أداء وظيفتها",
+          "scenario_ar": "ماذا تقول عندما يتوقف الهاتف أو جهاز آخر عن العمل؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "social_occasions",
+      "label_ar": "الضيافة والمناسبات",
+      "coverage_tags": ["all_saudi", "social_life", "heritage"],
+      "prompts": [
+        {
+          "id": "guest",
+          "msa_lemma": "ضيف",
+          "definition_ar": "شخص يأتي لزيارة بيت أو مجلس",
+          "scenario_ar": "ما الكلمة التي تستخدمها للشخص الذي يأتي لزيارتك وتكرمه؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "invitation",
+          "msa_lemma": "دعوة",
+          "definition_ar": "طلب حضور مناسبة أو زيارة",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما تطلب من شخص حضور مناسبة أو طعام؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "wedding",
+          "msa_lemma": "حفل زفاف",
+          "definition_ar": "مناسبة الاحتفال بالزواج",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمناسبة التي يُحتفل فيها بزواج شخصين؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "engagement",
+          "msa_lemma": "خطوبة",
+          "definition_ar": "اتفاق ووعد يسبق الزواج",
+          "scenario_ar": "ما الكلمة التي تستخدمها للمناسبة أو المرحلة التي تسبق الزواج بعد الاتفاق؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "celebration",
+          "msa_lemma": "احتفال",
+          "definition_ar": "اجتماع أو نشاط للتعبير عن الفرح بمناسبة",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يجتمع الناس للفرح بمناسبة؟",
+          "part_of_speech": "noun",
+          "priority": 80
+        },
+        {
+          "id": "condolence",
+          "msa_lemma": "تعزية",
+          "definition_ar": "مواساة أهل المتوفى",
+          "scenario_ar": "ما الكلمة التي تستخدمها لزيارة أو كلام مواساة أهل شخص توفي؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "large-feast",
+          "msa_lemma": "وليمة",
+          "definition_ar": "طعام كثير يُعد للضيوف أو مناسبة",
+          "scenario_ar": "ما الكلمة التي تستخدمها للطعام الكثير الذي يُجهز لعدد كبير من الضيوف؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "social-gathering",
+          "msa_lemma": "تجمّع اجتماعي",
+          "definition_ar": "اجتماع أقارب أو أصدقاء للجلوس والحديث",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما يجتمع الأهل أو الأصحاب للجلوس معًا؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "visit",
+          "msa_lemma": "زيارة",
+          "definition_ar": "الذهاب إلى شخص للقاء أو الاطمئنان",
+          "scenario_ar": "ما الكلمة التي تستخدمها عندما تذهب إلى بيت قريب أو صديق لتراه؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "gift",
+          "msa_lemma": "هدية",
+          "definition_ar": "شيء يُعطى دون مقابل في مناسبة أو محبة",
+          "scenario_ar": "ما الكلمة التي تستخدمها لشيء تقدمه لشخص في مناسبة دون مقابل؟",
+          "part_of_speech": "noun",
+          "priority": 90
+        },
+        {
+          "id": "congratulations",
+          "msa_lemma": "تهانينا",
+          "definition_ar": "كلام يُقال عند حدث سعيد أو نجاح",
+          "scenario_ar": "ماذا تقول لشخص نجح أو حدثت له مناسبة سعيدة؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "welcome-guest",
+          "msa_lemma": "مرحبًا بك",
+          "definition_ar": "كلام استقبال وإكرام للقادم",
+          "scenario_ar": "ماذا تقول عندما يدخل ضيف وتريد الترحيب به؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "home_chores",
+      "label_ar": "أعمال المنزل",
+      "coverage_tags": ["all_saudi", "home", "daily_life"],
+      "prompts": [
+        {
+          "id": "clean-verb",
+          "msa_lemma": "نظّف",
+          "definition_ar": "أزال الأوساخ من شيء أو مكان",
+          "scenario_ar": "ماذا تقول عندما تطلب من شخص إزالة الأوساخ من الغرفة؟",
+          "part_of_speech": "verb_imperative",
+          "priority": 90
+        },
+        {
+          "id": "wash-clothes",
+          "msa_lemma": "اغسل الملابس",
+          "definition_ar": "نظّف الملابس بالماء والمنظف",
+          "scenario_ar": "ماذا تقول عندما تطلب من شخص تنظيف الملابس بالماء؟",
+          "part_of_speech": "verb_phrase",
+          "priority": 100
+        },
+        {
+          "id": "sweep-floor",
+          "msa_lemma": "اكنس",
+          "definition_ar": "جمع الغبار من الأرض بالمكنسة",
+          "scenario_ar": "ماذا تقول عندما تطلب من شخص جمع الغبار من أرض الغرفة بالمكنسة؟",
+          "part_of_speech": "verb_imperative",
+          "priority": 100
+        },
+        {
+          "id": "mop-floor",
+          "msa_lemma": "امسح الأرض",
+          "definition_ar": "نظّف الأرض بالماء وأداة المسح",
+          "scenario_ar": "ماذا تقول عندما تطلب تنظيف الأرض بالماء بعد كنسها؟",
+          "part_of_speech": "verb_phrase",
+          "priority": 100
+        },
+        {
+          "id": "dry-object",
+          "msa_lemma": "جفّف",
+          "definition_ar": "أزال الماء أو الرطوبة من شيء",
+          "scenario_ar": "ماذا تقول عندما تطلب من شخص إزالة الماء عن الأواني أو الملابس؟",
+          "part_of_speech": "verb_imperative",
+          "priority": 90
+        },
+        {
+          "id": "tidy-up",
+          "msa_lemma": "رتّب",
+          "definition_ar": "وضع الأشياء في أماكن منظمة",
+          "scenario_ar": "ماذا تقول عندما تطلب من شخص تنظيم الغرفة ووضع الأشياء في أماكنها؟",
+          "part_of_speech": "verb_imperative",
+          "priority": 100
+        },
+        {
+          "id": "dirty-object",
+          "msa_lemma": "متسخ",
+          "definition_ar": "عليه أوساخ ويحتاج إلى تنظيف",
+          "scenario_ar": "ماذا تقول عن ثوب أو مكان عليه أوساخ؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "rubbish",
+          "msa_lemma": "نفايات",
+          "definition_ar": "أشياء غير مرغوبة تُرمى",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأشياء التي تجمعها لترميها لأنها لم تعد نافعة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "bucket",
+          "msa_lemma": "دلو",
+          "definition_ar": "وعاء له مقبض لحمل الماء",
+          "scenario_ar": "ما الكلمة التي تستخدمها للوعاء الذي تحمل فيه الماء وله مقبض؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "broom",
+          "msa_lemma": "مكنسة",
+          "definition_ar": "أداة لجمع الغبار عن الأرض",
+          "scenario_ar": "ما الكلمة التي تستخدمها للأداة التي تجمع بها الغبار عن الأرض؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "laundry",
+          "msa_lemma": "ملابس للغسل",
+          "definition_ar": "الملابس التي تحتاج إلى غسل أو غُسلت",
+          "scenario_ar": "ما الكلمة التي تستخدمها لمجموعة الملابس التي ستضعها في الغسالة؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        },
+        {
+          "id": "dishes",
+          "msa_lemma": "أواني الطعام",
+          "definition_ar": "الصحون والأكواب والأدوات المستخدمة للأكل",
+          "scenario_ar": "ما الكلمة التي تستخدمها للصحون والأكواب التي تحتاج إلى غسل بعد الطعام؟",
+          "part_of_speech": "noun",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "descriptions",
+      "label_ar": "الصفات والمقارنات",
+      "coverage_tags": ["all_saudi", "core_vocabulary"],
+      "prompts": [
+        {
+          "id": "big",
+          "msa_lemma": "كبير",
+          "definition_ar": "ذو حجم أكبر من المعتاد",
+          "scenario_ar": "ماذا تقول عن شيء حجمه أكبر من الأشياء المشابهة له؟",
+          "part_of_speech": "adjective",
+          "priority": 90
+        },
+        {
+          "id": "small",
+          "msa_lemma": "صغير",
+          "definition_ar": "ذو حجم أقل من المعتاد",
+          "scenario_ar": "ماذا تقول عن شيء حجمه أقل من الأشياء المشابهة له؟",
+          "part_of_speech": "adjective",
+          "priority": 90
+        },
+        {
+          "id": "tall-person",
+          "msa_lemma": "طويل القامة",
+          "definition_ar": "شخص يزيد طوله على المعتاد",
+          "scenario_ar": "ماذا تقول عن شخص قامته أعلى من معظم الناس؟",
+          "part_of_speech": "adjective",
+          "priority": 90
+        },
+        {
+          "id": "short-person",
+          "msa_lemma": "قصير القامة",
+          "definition_ar": "شخص يقل طوله عن المعتاد",
+          "scenario_ar": "ماذا تقول عن شخص قامته أقل من معظم الناس؟",
+          "part_of_speech": "adjective",
+          "priority": 90
+        },
+        {
+          "id": "wide",
+          "msa_lemma": "واسع",
+          "definition_ar": "ذو عرض أو مساحة كبيرة",
+          "scenario_ar": "ماذا تقول عن غرفة فيها مساحة كبيرة؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "narrow",
+          "msa_lemma": "ضيّق",
+          "definition_ar": "ذو عرض أو مساحة قليلة",
+          "scenario_ar": "ماذا تقول عن طريق لا يتسع إلا لعدد قليل من السيارات؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "heavy",
+          "msa_lemma": "ثقيل",
+          "definition_ar": "يحتاج إلى قوة كبيرة لحمله",
+          "scenario_ar": "ماذا تقول عن صندوق يصعب رفعه بسبب وزنه؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "light-weight",
+          "msa_lemma": "خفيف",
+          "definition_ar": "سهل الحمل لقلة وزنه",
+          "scenario_ar": "ماذا تقول عن شيء يسهل حمله لأن وزنه قليل؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "new-object",
+          "msa_lemma": "جديد",
+          "definition_ar": "صُنع أو اقتُني حديثًا",
+          "scenario_ar": "ماذا تقول عن شيء اشتريته حديثًا ولم يُستخدم كثيرًا؟",
+          "part_of_speech": "adjective",
+          "priority": 80
+        },
+        {
+          "id": "old-object",
+          "msa_lemma": "قديم",
+          "definition_ar": "مضى على وجوده أو استعماله وقت طويل",
+          "scenario_ar": "ماذا تقول عن شيء استُخدم منذ سنوات طويلة؟",
+          "part_of_speech": "adjective",
+          "priority": 90
+        },
+        {
+          "id": "beautiful",
+          "msa_lemma": "جميل",
+          "definition_ar": "حسن المنظر أو يبعث على الإعجاب",
+          "scenario_ar": "ماذا تقول عن منظر أو شيء يعجبك شكله؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        },
+        {
+          "id": "ugly",
+          "msa_lemma": "قبيح",
+          "definition_ar": "غير حسن المنظر أو غير مستحب",
+          "scenario_ar": "ماذا تقول عن شيء لا يعجبك منظره؟",
+          "part_of_speech": "adjective",
+          "priority": 100
+        }
+      ]
+    },
+    {
+      "id": "saudi_conversational_phrases",
+      "label_ar": "عبارات المحادثة اليومية",
+      "coverage_tags": ["all_saudi", "conversation", "high_variation"],
+      "prompts": [
+        {
+          "id": "lets-go",
+          "msa_lemma": "هيا بنا",
+          "definition_ar": "دعوة للبدء أو المغادرة معًا",
+          "scenario_ar": "ماذا تقول لأصحابك عندما تريد أن تبدأوا الحركة أو تغادروا؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "calm-down",
+          "msa_lemma": "اهدأ",
+          "definition_ar": "طلب التوقف عن الانفعال",
+          "scenario_ar": "ماذا تقول لشخص غاضب عندما تطلب منه أن يهدأ؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "dont-worry",
+          "msa_lemma": "لا تقلق",
+          "definition_ar": "طمأنة شخص خائف أو مشغول الفكر",
+          "scenario_ar": "ماذا تقول لشخص قلق عندما تريد أن تطمئنه؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "whats-wrong",
+          "msa_lemma": "ما بك؟",
+          "definition_ar": "سؤال شخص عن سبب حاله غير المعتادة",
+          "scenario_ar": "ماذا تقول لشخص يبدو متعبًا أو منزعجًا لتعرف مشكلته؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "give-me-a-moment",
+          "msa_lemma": "أمهلني لحظة",
+          "definition_ar": "طلب وقت قصير قبل الإجابة أو الفعل",
+          "scenario_ar": "ماذا تقول عندما تحتاج وقتًا قصيرًا قبل أن تنفذ طلب شخص؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "on-my-way",
+          "msa_lemma": "أنا في الطريق",
+          "definition_ar": "إخبار شخص بأنك بدأت الذهاب إليه",
+          "scenario_ar": "ماذا تقول في الهاتف عندما غادرت وأصبحت متجهًا إلى الشخص؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "i-arrived",
+          "msa_lemma": "وصلت",
+          "definition_ar": "إخبار شخص بانتهاء الرحلة والوصول للمكان",
+          "scenario_ar": "ماذا تقول في الهاتف عندما تصل إلى المكان المتفق عليه؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "i-got-lost",
+          "msa_lemma": "ضللت الطريق",
+          "definition_ar": "عدم معرفة الطريق أو المكان الصحيح",
+          "scenario_ar": "ماذا تقول عندما لا تعرف الطريق الذي يوصلك إلى المكان؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "say-it-again",
+          "msa_lemma": "أعد كلامك",
+          "definition_ar": "طلب تكرار ما قيل",
+          "scenario_ar": "ماذا تقول عندما تريد من شخص أن يكرر الجملة التي قالها؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "i-didnt-hear",
+          "msa_lemma": "لم أسمع",
+          "definition_ar": "إخبار المتحدث بأن صوته لم يصل بوضوح",
+          "scenario_ar": "ماذا تقول عندما يتحدث شخص بصوت لم تسمعه؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "speak-slowly",
+          "msa_lemma": "تكلّم ببطء",
+          "definition_ar": "طلب تخفيف سرعة الكلام",
+          "scenario_ar": "ماذا تقول عندما يتحدث شخص بسرعة ولا تستطيع فهمه؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        },
+        {
+          "id": "leave-me-alone",
+          "msa_lemma": "اتركني وحدي",
+          "definition_ar": "طلب عدم الإزعاج أو الابتعاد",
+          "scenario_ar": "ماذا تقول عندما تريد من شخص أن يبتعد ولا يزعجك؟",
+          "part_of_speech": "phrase",
+          "priority": 100
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { projectToExportV1, type CanonicalEntryForExport } from "./projection";
-import { computeChecksum, serializeJson, serializeJsonl } from "./serializer";
+import {
+  EXPORT_SCHEMA_VERSION,
+  EXPORT_SCHEMA_VERSION_V2,
+  projectToExportV1,
+  projectToExportV2,
+  type CanonicalEntryForExport,
+} from "./projection";
+import {
+  computeChecksum,
+  computeChecksumV2,
+  serializeJson,
+  serializeJsonl,
+  serializeJsonV2,
+  serializeJsonlV2,
+} from "./serializer";
 
 function entry(
   overrides: Partial<CanonicalEntryForExport> = {},
@@ -60,6 +73,99 @@ describe("serializer determinism", () => {
   it("produces one JSON object per line for jsonl", () => {
     const records = projectToExportV1([entry({ id: "a" }), entry({ id: "b" })]);
     const lines = serializeJsonl(records).split("\n");
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(() => JSON.parse(line)).not.toThrow();
+  });
+
+  it("locks the v1 contract: a fixed input always produces this exact checksum", () => {
+    // Backward-compatibility guard: if this ever needs to change, the v1
+    // contract itself changed, which CLAUDE.md/data-model.md say must not
+    // happen silently — bump EXPORT_SCHEMA_VERSION_V2 (or a new version)
+    // instead of editing this expectation.
+    const records = projectToExportV1([entry()]);
+    expect(computeChecksum(records)).toBe(
+      "04e570a797866a783f924728c141a91d3d28dfaab8e963d1afd47bbad3f07a23",
+    );
+  });
+
+  it("v1 output never contains schema v2's additive fields", () => {
+    const [record] = projectToExportV1([
+      entry({ main_group_code: "hijazi", main_group_label_ar: "حجازي" }),
+    ]);
+    expect(record).not.toHaveProperty("main_dialect_group");
+    expect(record).not.toHaveProperty("reference_concept_id");
+  });
+});
+
+describe("projectToExportV2 (additive, provisional)", () => {
+  it("includes every v1 field unchanged, plus the additive fields", () => {
+    const [v1] = projectToExportV1([entry()]);
+    const [v2] = projectToExportV2([entry()]);
+    for (const key of Object.keys(v1) as (keyof typeof v1)[]) {
+      expect(v2[key]).toEqual(v1[key]);
+    }
+    expect(v2).toHaveProperty("main_dialect_group");
+    expect(v2).toHaveProperty("main_dialect_group_label");
+    expect(v2).toHaveProperty("reference_concept_id");
+  });
+
+  it("carries the main dialect group and reference concept id when present", () => {
+    const [record] = projectToExportV2([
+      entry({
+        main_group_code: "hijazi",
+        main_group_label_ar: "حجازي",
+        reference_concept: {
+          id: "sad-lonely-word",
+          category: "emotions",
+          msa_lemma: "وحيد",
+        },
+      }),
+    ]);
+    expect(record.main_dialect_group).toBe("hijazi");
+    expect(record.main_dialect_group_label).toBe("حجازي");
+    expect(record.reference_concept_id).toBe("sad-lonely-word");
+  });
+
+  it("uses null (never undefined or a missing key) when a v2 entry has no prompt link or group", () => {
+    const [record] = projectToExportV2([entry()]);
+    expect(record.main_dialect_group).toBeNull();
+    expect(record.main_dialect_group_label).toBeNull();
+    expect(record.reference_concept_id).toBeNull();
+  });
+
+  it("still excludes internal moderation/admin fields", () => {
+    const [record] = projectToExportV2([entry()]);
+    expect(record).not.toHaveProperty("review_status");
+    expect(record).not.toHaveProperty("editorial_status");
+    expect(record).not.toHaveProperty("abuse_hash");
+  });
+
+  it("uses schema_version 2 in the envelope, distinct from v1's default", () => {
+    const records = projectToExportV2([entry()]);
+    const envelope = JSON.parse(
+      serializeJsonV2(records, "2026-01-01T00:00:00.000Z"),
+    );
+    expect(envelope.schema_version).toBe(EXPORT_SCHEMA_VERSION_V2);
+    expect(EXPORT_SCHEMA_VERSION_V2).not.toBe(EXPORT_SCHEMA_VERSION);
+  });
+
+  it("computes a deterministic checksum independent of record order", () => {
+    const a = entry({ id: "a", main_group_code: "hijazi" });
+    const b = entry({ id: "b", main_group_code: "najdi" });
+    const ab = projectToExportV2([a, b]);
+    const ba = projectToExportV2([b, a]);
+    expect(computeChecksumV2(ab)).toBe(computeChecksumV2(ba));
+  });
+
+  it("changes the checksum when the main dialect group changes", () => {
+    const before = projectToExportV2([entry({ main_group_code: "hijazi" })]);
+    const after = projectToExportV2([entry({ main_group_code: "najdi" })]);
+    expect(computeChecksumV2(before)).not.toBe(computeChecksumV2(after));
+  });
+
+  it("produces one JSON object per line for jsonl", () => {
+    const records = projectToExportV2([entry({ id: "a" }), entry({ id: "b" })]);
+    const lines = serializeJsonlV2(records).split("\n");
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(() => JSON.parse(line)).not.toThrow();
   });

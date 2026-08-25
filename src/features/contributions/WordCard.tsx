@@ -26,6 +26,7 @@ interface WordCardProps {
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onAddAnotherForSamePrompt?: () => void;
   canRemove: boolean;
 }
 
@@ -41,27 +42,40 @@ export function WordCard({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onAddAnotherForSamePrompt,
   canRemove,
 }: WordCardProps) {
   const base = `word-${card.clientId}`;
+  const isGuided = Boolean(
+    card.referencePromptId && card.referencePromptSnapshot,
+  );
 
   return (
     <section
-      className="border-border bg-surface flex flex-col gap-4 rounded-2xl border p-4 shadow-sm sm:p-5"
+      className={`bg-surface flex flex-col gap-4 rounded-2xl border p-4 shadow-sm sm:p-5 ${
+        isGuided ? "border-accent/40 ring-accent/15 ring-1" : "border-border"
+      }`}
       aria-labelledby={`${base}-heading`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2
-          id={`${base}-heading`}
-          className="text-foreground text-base font-bold"
-        >
-          الكلمة {toArabicDigits(index + 1)}
-        </h2>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <h2
+            id={`${base}-heading`}
+            className="text-foreground text-base font-bold"
+          >
+            الكلمة {toArabicDigits(index + 1)}
+          </h2>
+          {isGuided ? (
+            <span className="bg-accent/10 text-accent inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
+              مرتبطة بمعنى مقترح
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
-            className="min-h-9 px-2 text-xs"
+            className="min-h-11 min-w-11 px-2 text-xs"
             onClick={onMoveUp}
             disabled={index === 0}
             aria-label="نقل الكلمة للأعلى"
@@ -71,7 +85,7 @@ export function WordCard({
           <Button
             type="button"
             variant="ghost"
-            className="min-h-9 px-2 text-xs"
+            className="min-h-11 min-w-11 px-2 text-xs"
             onClick={onMoveDown}
             disabled={index === total - 1}
             aria-label="نقل الكلمة للأسفل"
@@ -82,7 +96,7 @@ export function WordCard({
             <Button
               type="button"
               variant="ghost"
-              className="text-danger min-h-9 px-2 text-xs"
+              className="text-danger min-h-11 px-2 text-xs"
               onClick={onRemove}
               aria-label={`حذف الكلمة ${toArabicDigits(index + 1)}`}
             >
@@ -91,6 +105,12 @@ export function WordCard({
           ) : null}
         </div>
       </div>
+
+      {isGuided && card.referencePromptSnapshot ? (
+        <p className="bg-surface-muted text-foreground/70 rounded-lg px-3 py-2 text-sm">
+          {card.referencePromptSnapshot.scenarioAr}
+        </p>
+      ) : null}
 
       <Field
         id={`${base}-word`}
@@ -138,14 +158,23 @@ export function WordCard({
         required
         error={errors.msaSynonym}
       >
-        <input
-          id={`${base}-msa`}
-          value={card.msaSynonym}
-          maxLength={FIELD_LIMITS.msaSynonym}
-          onChange={(e) => onUpdateField("msaSynonym", e.target.value)}
-          className={inputClass(Boolean(errors.msaSynonym))}
-          aria-invalid={Boolean(errors.msaSynonym)}
-        />
+        {isGuided ? (
+          <p
+            id={`${base}-msa`}
+            className="border-border bg-surface-muted text-foreground/80 min-h-11 w-full rounded-lg border px-3 py-2 text-base"
+          >
+            {card.msaSynonym}
+          </p>
+        ) : (
+          <input
+            id={`${base}-msa`}
+            value={card.msaSynonym}
+            maxLength={FIELD_LIMITS.msaSynonym}
+            onChange={(e) => onUpdateField("msaSynonym", e.target.value)}
+            className={inputClass(Boolean(errors.msaSynonym))}
+            aria-invalid={Boolean(errors.msaSynonym)}
+          />
+        )}
       </Field>
 
       <Field
@@ -153,14 +182,23 @@ export function WordCard({
         label="المعنى ومتى تُستخدم"
         error={errors.explanation}
       >
-        <textarea
-          id={`${base}-explanation`}
-          value={card.explanation ?? ""}
-          maxLength={FIELD_LIMITS.explanation}
-          rows={3}
-          onChange={(e) => onUpdateField("explanation", e.target.value)}
-          className={inputClass(Boolean(errors.explanation))}
-        />
+        {isGuided ? (
+          <p
+            id={`${base}-explanation`}
+            className="border-border bg-surface-muted text-foreground/80 w-full rounded-lg border px-3 py-2 text-base"
+          >
+            {card.explanation}
+          </p>
+        ) : (
+          <textarea
+            id={`${base}-explanation`}
+            value={card.explanation ?? ""}
+            maxLength={FIELD_LIMITS.explanation}
+            rows={3}
+            onChange={(e) => onUpdateField("explanation", e.target.value)}
+            className={inputClass(Boolean(errors.explanation))}
+          />
+        )}
       </Field>
 
       <fieldset className="flex flex-col gap-2">
@@ -218,6 +256,17 @@ export function WordCard({
           + إضافة مثال
         </Button>
       </fieldset>
+
+      {isGuided && onAddAnotherForSamePrompt ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className="self-start text-sm"
+          onClick={onAddAnotherForSamePrompt}
+        >
+          + كلمة أخرى لنفس المعنى (من منطقة مختلفة مثلًا)
+        </Button>
+      ) : null}
     </section>
   );
 }

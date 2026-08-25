@@ -9,13 +9,23 @@ export interface ExportFilters {
   updatedTo?: string;
 }
 
+const MAIN_GROUP_LABELS_AR: Record<string, string> = {
+  hijazi: "حجازي",
+  najdi: "نجدي",
+  eastern: "شرقاوي",
+  northern: "شمالي",
+  southern: "جنوبي",
+};
+
 export async function fetchApprovedEntries(
   filters: ExportFilters,
 ): Promise<CanonicalEntryForExport[]> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("canonical_entries")
-    .select("*, dialects(name_ar), canonical_examples(sentence, position)")
+    .select(
+      "*, dialects(name_ar, main_group_code), canonical_examples(sentence, position), reference_prompts(id, category, msa_lemma)",
+    )
     .eq("editorial_status", "approved");
 
   if (filters.dialectId)
@@ -36,8 +46,13 @@ export async function fetchApprovedEntries(
     canonical_explanation: string | null;
     approved_at: string | null;
     updated_at: string;
-    dialects: { name_ar: string } | null;
+    dialects: { name_ar: string; main_group_code: string | null } | null;
     canonical_examples: { sentence: string; position: number }[];
+    reference_prompts: {
+      id: string;
+      category: string;
+      msa_lemma: string;
+    } | null;
   }[];
 
   return rows.map((row) => ({
@@ -51,6 +66,17 @@ export async function fetchApprovedEntries(
     examples: (row.canonical_examples ?? [])
       .sort((a, b) => a.position - b.position)
       .map((e) => ({ sentence: e.sentence })),
+    main_group_code: row.dialects?.main_group_code ?? null,
+    main_group_label_ar: row.dialects?.main_group_code
+      ? (MAIN_GROUP_LABELS_AR[row.dialects.main_group_code] ?? null)
+      : null,
+    reference_concept: row.reference_prompts
+      ? {
+          id: row.reference_prompts.id,
+          category: row.reference_prompts.category,
+          msa_lemma: row.reference_prompts.msa_lemma,
+        }
+      : null,
   }));
 }
 

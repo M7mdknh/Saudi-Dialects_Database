@@ -26,6 +26,8 @@ export async function createSubmissionBatch(
     explanation: word.explanation ?? "",
     wordSearchKey: toSearchKey(word.word),
     dialectSearchKey: toSearchKey(word.dialect),
+    referencePromptId: word.referencePromptId ?? null,
+    referencePromptSnapshot: word.referencePromptSnapshot ?? null,
     examples: word.examples.map((example, index) => ({
       sentence: example.sentence,
       sentenceSearchKey: toSearchKey(example.sentence),

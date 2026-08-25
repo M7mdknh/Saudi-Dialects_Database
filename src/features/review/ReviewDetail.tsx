@@ -28,6 +28,34 @@ interface SubmissionDetail {
   created_at: string;
   updated_at: string;
   raw_examples: ExampleRow[];
+  reference_prompt_id: string | null;
+  reference_prompt_snapshot: unknown;
+}
+
+interface ReferencePromptSnapshotView {
+  msaLemma: string;
+  definitionAr: string;
+  scenarioAr: string;
+  categoryLabelAr: string;
+}
+
+function readSnapshot(value: unknown): ReferencePromptSnapshotView | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.msaLemma !== "string" ||
+    typeof v.definitionAr !== "string" ||
+    typeof v.scenarioAr !== "string" ||
+    typeof v.categoryLabelAr !== "string"
+  ) {
+    return null;
+  }
+  return {
+    msaLemma: v.msaLemma,
+    definitionAr: v.definitionAr,
+    scenarioAr: v.scenarioAr,
+    categoryLabelAr: v.categoryLabelAr,
+  };
 }
 
 interface ReviewEventRow {
@@ -107,6 +135,7 @@ export function ReviewDetail({
           msaSynonyms: [msaSynonym],
           explanation,
           editorialStatus: "approved",
+          referencePromptId: submission.reference_prompt_id,
         });
         await setReviewStatus(submission.id, "approved", submission.updated_at);
         setStatus("saved");
@@ -118,13 +147,29 @@ export function ReviewDetail({
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{submission.submitted_word}</h1>
         <span className="text-foreground/60 text-sm">
           {STATUS_LABELS_AR[submission.review_status]}
         </span>
       </div>
+
+      {(() => {
+        const snapshot = readSnapshot(submission.reference_prompt_snapshot);
+        if (!snapshot) return null;
+        return (
+          <div className="border-accent/30 bg-accent/5 flex items-start gap-2 rounded-xl border px-3 py-2 text-sm">
+            <span className="bg-accent/10 text-accent mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
+              معنى مقترح
+            </span>
+            <span className="text-foreground/80">
+              {snapshot.categoryLabelAr} — {snapshot.msaLemma}:{" "}
+              {snapshot.definitionAr}
+            </span>
+          </div>
+        );
+      })()}
 
       <section className="border-border bg-surface rounded-2xl border p-4">
         <h2 className="text-foreground/70 mb-3 text-sm font-bold">

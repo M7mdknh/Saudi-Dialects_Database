@@ -1,5 +1,7 @@
 import type { WordCardInput } from "./schema";
 import { MAX_EXAMPLES_PER_WORD, MAX_WORD_CARDS } from "./constants";
+import type { GuidedPromptRecord } from "@/features/prompts/types";
+import { toSnapshot } from "@/features/prompts/types";
 
 let counter = 0;
 export function makeClientId(prefix: string): string {
@@ -7,14 +9,16 @@ export function makeClientId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${counter}`;
 }
 
-export function emptyWordCard(): WordCardInput {
+export function emptyWordCard(guided?: GuidedPromptRecord): WordCardInput {
   return {
     clientId: makeClientId("word"),
     word: "",
     dialect: "",
-    msaSynonym: "",
-    explanation: "",
+    msaSynonym: guided?.msaLemma ?? "",
+    explanation: guided?.definitionAr ?? "",
     examples: [{ sentence: "" }],
+    referencePromptId: guided?.id ?? null,
+    referencePromptSnapshot: guided ? toSnapshot(guided) : null,
   };
 }
 
@@ -25,6 +29,8 @@ export interface BatchState {
 
 export type BatchAction =
   | { type: "ADD_WORD" }
+  | { type: "ADD_GUIDED_WORD"; prompt: GuidedPromptRecord }
+  | { type: "ADD_ANOTHER_FOR_SAME_PROMPT"; clientId: string }
   | { type: "REMOVE_WORD"; clientId: string }
   | { type: "MOVE_WORD"; clientId: string; direction: "up" | "down" }
   | {
@@ -44,6 +50,9 @@ export function initialBatchState(): BatchState {
   return { words: [emptyWordCard()], consent: false };
 }
 
+/** Guided reference fields (synonym/meaning) are read-only from the UI, so a stray UPDATE_WORD for them is ignored defensively. */
+const READ_ONLY_WHEN_GUIDED = new Set(["msaSynonym", "explanation"]);
+
 export function batchReducer(
   state: BatchState,
   action: BatchAction,
@@ -52,6 +61,34 @@ export function batchReducer(
     case "ADD_WORD": {
       if (state.words.length >= MAX_WORD_CARDS) return state;
       return { ...state, words: [...state.words, emptyWordCard()] };
+    }
+    case "ADD_GUIDED_WORD": {
+      if (state.words.length >= MAX_WORD_CARDS) return state;
+      return {
+        ...state,
+        words: [...state.words, emptyWordCard(action.prompt)],
+      };
+    }
+    case "ADD_ANOTHER_FOR_SAME_PROMPT": {
+      if (state.words.length >= MAX_WORD_CARDS) return state;
+      const source = state.words.find((w) => w.clientId === action.clientId);
+      if (!source || !source.referencePromptSnapshot) return state;
+      const duplicate: WordCardInput = {
+        clientId: makeClientId("word"),
+        word: "",
+        dialect: "",
+        msaSynonym: source.msaSynonym,
+        explanation: source.explanation,
+        examples: [{ sentence: "" }],
+        referencePromptId: source.referencePromptId,
+        referencePromptSnapshot: source.referencePromptSnapshot,
+      };
+      const index = state.words.findIndex(
+        (w) => w.clientId === action.clientId,
+      );
+      const words = [...state.words];
+      words.splice(index + 1, 0, duplicate);
+      return { ...state, words };
     }
     case "REMOVE_WORD": {
       if (state.words.length <= 1) return state;
@@ -74,11 +111,12 @@ export function batchReducer(
     case "UPDATE_WORD": {
       return {
         ...state,
-        words: state.words.map((w) =>
-          w.clientId === action.clientId
-            ? { ...w, [action.field]: action.value }
-            : w,
-        ),
+        words: state.words.map((w) => {
+          if (w.clientId !== action.clientId) return w;
+          if (w.referencePromptId && READ_ONLY_WHEN_GUIDED.has(action.field))
+            return w;
+          return { ...w, [action.field]: action.value };
+        }),
       };
     }
     case "ADD_EXAMPLE": {

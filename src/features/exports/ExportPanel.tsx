@@ -13,6 +13,7 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
   const [dialectId, setDialectId] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
+  const [schemaVersion, setSchemaVersion] = useState<"1" | "2">("1");
   const [preview, setPreview] = useState<{
     recordCount: number;
     schemaVersion: number;
@@ -26,6 +27,7 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
     if (updatedFrom)
       params.set("updatedFrom", new Date(updatedFrom).toISOString());
     if (updatedTo) params.set("updatedTo", new Date(updatedTo).toISOString());
+    if (schemaVersion === "2") params.set("schemaVersion", "2");
     for (const [k, v] of Object.entries(extra)) params.set(k, v);
     return params.toString();
   }
@@ -52,7 +54,7 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
       <h1 className="text-xl font-bold">تصدير البيانات</h1>
       <Field id="export-dialect" label="اللهجة المعتمدة">
         <select
@@ -89,6 +91,20 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
           />
         </Field>
       </div>
+
+      <Field id="export-schema-version" label="إصدار مخطط التصدير">
+        <select
+          id="export-schema-version"
+          value={schemaVersion}
+          onChange={(e) => setSchemaVersion(e.target.value as "1" | "2")}
+          className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+        >
+          <option value="1">الإصدار ١ (الافتراضي والثابت)</option>
+          <option value="2">
+            الإصدار ٢ (يضيف تصنيف اللهجة الرئيسية والمفهوم المرجعي)
+          </option>
+        </select>
+      </Field>
 
       <Button
         type="button"

@@ -4,8 +4,15 @@
  * can change without touching the database schema. Only approved canonical
  * records are eligible; callers must pre-filter for editorial_status =
  * 'approved' before calling this.
+ *
+ * Schema v1 is the original, unchanged contract — kept byte-for-byte
+ * backward compatible. Schema v2 is additive and provisional: it adds the
+ * main Saudi dialect group and, where a canonical entry originated from a
+ * guided reference prompt, the concept it answers. Callers opt into v2
+ * explicitly (see /api/admin/exports?schemaVersion=2); v1 stays the default.
  */
 export const EXPORT_SCHEMA_VERSION = 1;
+export const EXPORT_SCHEMA_VERSION_V2 = 2;
 
 export interface CanonicalEntryForExport {
   id: string;
@@ -16,6 +23,13 @@ export interface CanonicalEntryForExport {
   approved_at: string | null;
   updated_at: string;
   examples: { sentence: string }[];
+  main_group_code?: string | null;
+  main_group_label_ar?: string | null;
+  reference_concept?: {
+    id: string;
+    category: string;
+    msa_lemma: string;
+  } | null;
 }
 
 export interface ExportRecordV1 {
@@ -27,6 +41,12 @@ export interface ExportRecordV1 {
   examples: string[];
   approved_at: string | null;
   updated_at: string;
+}
+
+export interface ExportRecordV2 extends ExportRecordV1 {
+  main_dialect_group: string | null;
+  main_dialect_group_label: string | null;
+  reference_concept_id: string | null;
 }
 
 /** Deterministic ordering: stable, independent of insertion order. */
@@ -49,5 +69,24 @@ export function projectToExportV1(
     examples: entry.examples.map((e) => e.sentence),
     approved_at: entry.approved_at,
     updated_at: entry.updated_at,
+  }));
+}
+
+/** Additive v2 projection: everything in v1, plus main dialect group and reference-concept linkage where present. Never expands to internal/moderation fields. */
+export function projectToExportV2(
+  entries: CanonicalEntryForExport[],
+): ExportRecordV2[] {
+  return sortForExport(entries).map((entry) => ({
+    id: entry.id,
+    word: entry.canonical_word,
+    dialect: entry.canonical_dialect_name,
+    msa_synonyms: entry.canonical_msa_synonyms,
+    explanation: entry.canonical_explanation,
+    examples: entry.examples.map((e) => e.sentence),
+    approved_at: entry.approved_at,
+    updated_at: entry.updated_at,
+    main_dialect_group: entry.main_group_code ?? null,
+    main_dialect_group_label: entry.main_group_label_ar ?? null,
+    reference_concept_id: entry.reference_concept?.id ?? null,
   }));
 }

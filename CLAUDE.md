@@ -8,7 +8,7 @@ The public experience must stay extremely simple. The admin experience must make
 
 ## Current phase
 
-The product scope is approved, but the application has not been scaffolded yet. Implement the approved V1 only. Do not add public dictionary browsing, voting, contributor accounts, audio, AI classification, multi-admin roles, email notifications, or automatic Google Drive sync unless explicitly requested.
+V1 is scaffolded and implemented. V2 has since been approved and implemented on top of it: the project's scope narrowed to **Saudi dialects only**, and the public experience now includes a guided-contribution path (a reference-prompt bank of 300 concepts, `data/guided-prompts.sa.ar.json`), a five-group Saudi classification (`main_group_code`: حجازي، نجدي، شرقاوي، شمالي، جنوبي), a public leaderboard, a public per-dialect explorer, and admin prompt management. See `README.md` for the concrete routes, migrations, and dataset workflow. Do not add public dictionary browsing beyond the approved explorer, voting, contributor accounts, audio, AI classification, multi-admin roles, email notifications, or automatic Google Drive sync unless explicitly requested.
 
 ## Approved stack
 

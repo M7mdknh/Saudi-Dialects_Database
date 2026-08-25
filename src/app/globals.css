@@ -1,45 +1,57 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fbf9f6;
-  --foreground: #1f1a17;
+  --background: #f7f4ec;
+  --foreground: #1b2420;
+  --foreground-muted: #55645b;
   --surface: #ffffff;
-  --surface-muted: #f2ece4;
-  --accent: #a8532f;
+  --surface-muted: #efe9d9;
+  --accent: #0e6b4f;
+  --accent-hover: #0a4f3a;
   --accent-foreground: #ffffff;
-  --border: #e4dcd1;
-  --danger: #b3261e;
-  --success: #2e7d4f;
-  --focus-ring: #a8532f;
+  --gold: #b6902f;
+  --gold-foreground: #2f2508;
+  --border: #e2dbc9;
+  --danger: #a8281f;
+  --success: #14794f;
+  --focus-ring: #0e6b4f;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
   --color-border: var(--border);
   --color-danger: var(--danger);
   --color-success: var(--success);
   --font-arabic:
-    "Segoe UI", "Tahoma", "Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic",
-    "Arial", sans-serif;
+    var(--font-ibm-plex-sans-arabic), "Segoe UI", "Tahoma", "Geeza Pro",
+    "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #16130f;
-    --foreground: #f2ece4;
-    --surface: #201b16;
-    --surface-muted: #2a231c;
-    --accent: #d98356;
-    --accent-foreground: #16130f;
-    --border: #3a3129;
+    --background: #12180f;
+    --foreground: #eef2ea;
+    --foreground-muted: #9fb0a4;
+    --surface: #1a2118;
+    --surface-muted: #232b20;
+    --accent: #35a67e;
+    --accent-hover: #4bbd93;
+    --accent-foreground: #0a1a12;
+    --gold: #d8b45c;
+    --gold-foreground: #2b2107;
+    --border: #33402f;
     --danger: #ff8a80;
-    --success: #7fd99e;
-    --focus-ring: #d98356;
+    --success: #5fce9f;
+    --focus-ring: #35a67e;
   }
 }
 
@@ -56,4 +68,15 @@ body {
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
