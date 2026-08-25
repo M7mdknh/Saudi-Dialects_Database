@@ -5,14 +5,19 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 const NAV_LINKS = [
-  { href: "/", label: "الرئيسية" },
+  // Links straight to the contribution anchor (not just "/") for the
+  // smoother in-page scroll+focus behavior ContributionForm already
+  // implements for "#contribute" — but it's still the homepage
+  // destination, so isActive() below strips the hash before comparing.
+  { href: "/#contribute", label: "ساهم بكلمة" },
   { href: "/prompts", label: "تحدّي الكلمات" },
   { href: "/leaderboard", label: "لوحة اللهجات" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const path = href.split("#")[0] || "/";
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 export function SiteHeader() {

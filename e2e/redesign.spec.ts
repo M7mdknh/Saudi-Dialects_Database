@@ -17,16 +17,14 @@ test.describe("site identity and navigation", () => {
     const nav = page
       .getByRole("navigation", { name: "التنقّل الرئيسي" })
       .last();
-    for (const label of ["الرئيسية", "تحدّي الكلمات", "لوحة اللهجات"]) {
+    for (const label of ["ساهم بكلمة", "تحدّي الكلمات", "لوحة اللهجات"]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
-    // ساهم بكلمة is a page action (hero CTA / #contribute anchor), not a
-    // separate primary nav destination — it must never appear as a nav tab.
-    await expect(
-      nav.getByRole("link", { name: "ساهم بكلمة" }),
-    ).not.toBeVisible();
+    // الرئيسية was folded into ساهم بكلمة — it must never appear as its own
+    // separate nav tab.
+    await expect(nav.getByRole("link", { name: "الرئيسية" })).not.toBeVisible();
     await expect(nav.getByRole("link")).toHaveCount(3);
-    await expect(nav.getByRole("link", { name: "الرئيسية" })).toHaveAttribute(
+    await expect(nav.getByRole("link", { name: "ساهم بكلمة" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -198,21 +196,51 @@ test.describe("guided prompt card simplification", () => {
 });
 
 test.describe("?dialect= preselection and #contribute focus", () => {
-  test("navigating with a valid group code preselects the dialect and focuses the contribution section", async ({
+  test("navigating with a valid group code prefills the dialect, scrolls to the contribution section, and moves focus to the next empty field", async ({
     page,
   }) => {
     await page.goto("/?dialect=najdi#contribute");
     await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue(
       "نجدي",
     );
-    await expect(page.locator("#contribute")).toBeFocused();
+    // Prefilling the dialect moves focus to the next useful empty field
+    // (the word input) rather than leaving it on the section container.
+    await expect(page.getByLabel(/الكلمة باللهجة/).first()).toBeFocused();
+    // The ?dialect= param is consumed and stripped, #contribute kept.
+    await expect(page).toHaveURL(/\/#contribute$/);
   });
 
-  test("an invalid dialect code is ignored, leaving the field empty", async ({
+  test("an invalid dialect code is ignored, leaving the field empty, and focus still lands on the contribution section", async ({
     page,
   }) => {
     await page.goto("/?dialect=not-a-real-group#contribute");
     await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue("");
+    await expect(page.locator("#contribute")).toBeFocused();
+  });
+});
+
+test.describe("ساند لهجتك draft-safety choice", () => {
+  test("a different existing dialect is preserved and offered as a choice, not silently overwritten", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page
+      .getByLabel(/اللهجة أو المنطقة/)
+      .first()
+      .fill("نجدي");
+    await page.goto("/?dialect=hijazi#contribute");
+
+    await expect(
+      page.getByText("اخترت دعم اللهجة الحجازية من لوحة اللهجات."),
+    ).toBeVisible();
+    await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue(
+      "نجدي",
+    );
+
+    await page.getByRole("button", { name: "استخدام حجازي" }).click();
+    await expect(page.getByLabel(/اللهجة أو المنطقة/).first()).toHaveValue(
+      "حجازي",
+    );
   });
 });
 

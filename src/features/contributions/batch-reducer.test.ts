@@ -142,19 +142,36 @@ describe("batchReducer", () => {
   });
 
   describe("PRESELECT_MAIN_GROUP", () => {
-    it("sets the first card's dialect label and provisional group, with no dialectId", () => {
+    it("sets the first card's dialect to the trusted existing main-group id when one is resolved", () => {
       const state = initialBatchState();
       const next = batchReducer(state, {
         type: "PRESELECT_MAIN_GROUP",
         code: "hijazi",
         label: "حجازي",
+        dialectId: "aaaaaaaa-1111-4111-8111-111111111111",
+      });
+      expect(next.words[0].dialect).toBe("حجازي");
+      expect(next.words[0].dialectId).toBe(
+        "aaaaaaaa-1111-4111-8111-111111111111",
+      );
+      // A real dialectId means this is a normal selection, not a custom one.
+      expect(next.words[0].provisionalMainGroupCode).toBeNull();
+    });
+
+    it("falls back to a provisional-group entry when no trusted dialectId was resolved", () => {
+      const state = initialBatchState();
+      const next = batchReducer(state, {
+        type: "PRESELECT_MAIN_GROUP",
+        code: "hijazi",
+        label: "حجازي",
+        dialectId: null,
       });
       expect(next.words[0].dialect).toBe("حجازي");
       expect(next.words[0].dialectId).toBeNull();
       expect(next.words[0].provisionalMainGroupCode).toBe("hijazi");
     });
 
-    it("never overwrites a dialect the visitor already typed or chose", () => {
+    it("overwrites the current dialect unconditionally — the caller decides when that's safe", () => {
       let state = initialBatchState();
       state = batchReducer(state, {
         type: "UPDATE_DIALECT",
@@ -166,10 +183,11 @@ describe("batchReducer", () => {
         type: "PRESELECT_MAIN_GROUP",
         code: "najdi",
         label: "نجدي",
+        dialectId: "22222222-2222-4222-8222-222222222222",
       });
-      expect(next.words[0].dialect).toBe("جداوي");
+      expect(next.words[0].dialect).toBe("نجدي");
       expect(next.words[0].dialectId).toBe(
-        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
       );
     });
 
@@ -181,6 +199,7 @@ describe("batchReducer", () => {
         type: "PRESELECT_MAIN_GROUP",
         code: "eastern",
         label: "شرقاوي",
+        dialectId: null,
       });
       expect(next.words[1].clientId).toBe(secondClientId);
       expect(next.words[1].dialect).toBe("");

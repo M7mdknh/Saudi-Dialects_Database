@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedPromptRecord } from "@/features/prompts/types";
 import type { GuidedPromptPage } from "@/features/prompts/actions";
@@ -471,7 +471,7 @@ describe("ContributionForm Turnstile gating", () => {
 });
 
 describe("ContributionForm ?dialect= preselection", () => {
-  it("preselects a valid main-group code into the first card's dialect field", () => {
+  it("preselects a valid main-group code into the first card's dialect field, using the trusted existing dialect row", () => {
     mockSearchParams = new URLSearchParams("dialect=hijazi");
     render(
       <ContributionForm
@@ -480,6 +480,11 @@ describe("ContributionForm ?dialect= preselection", () => {
       />,
     );
     expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("حجازي");
+    // A trusted main-group id was resolved, so this renders as a normal
+    // selection — no "تتبع أي مجموعة رئيسية؟" custom-dialect fallback.
+    expect(
+      screen.queryByLabelText("تتبع أي مجموعة رئيسية؟"),
+    ).not.toBeInTheDocument();
   });
 
   it("ignores an invalid dialect query parameter (not one of the five group codes)", () => {
@@ -504,6 +509,200 @@ describe("ContributionForm ?dialect= preselection", () => {
       />,
     );
     expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("");
+  });
+
+  it("leaves the prefilled dialect editable — the visitor can clear it or type a different one", async () => {
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    const dialectInput = screen.getByLabelText(/اللهجة أو المنطقة/);
+    expect(dialectInput).toHaveValue("حجازي");
+    expect(dialectInput).not.toHaveAttribute("readonly");
+    expect(dialectInput).not.toBeDisabled();
+    await user.clear(dialectInput);
+    await user.type(dialectInput, "لهجة أخرى غير مدرجة");
+    expect(dialectInput).toHaveValue("لهجة أخرى غير مدرجة");
+  });
+
+  it("a draft with an empty dialect receives the prefill immediately", () => {
+    window.localStorage.setItem(
+      "lahajat.contribution.draft.v1",
+      JSON.stringify({
+        words: [
+          {
+            clientId: "w1",
+            word: "كلمة محفوظة",
+            dialect: "",
+            dialectId: null,
+            provisionalMainGroupCode: null,
+            msaSynonym: "",
+            explanation: "",
+            examples: [{ sentence: "" }],
+            referencePromptId: null,
+            referencePromptSnapshot: null,
+          },
+        ],
+        consent: false,
+      }),
+    );
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("حجازي");
+    // The rest of the restored draft is untouched.
+    expect(screen.getByLabelText(/الكلمة باللهجة/)).toHaveValue("كلمة محفوظة");
+  });
+
+  it("a draft that already has the same dialect is left unchanged, with no confirmation prompt", () => {
+    window.localStorage.setItem(
+      "lahajat.contribution.draft.v1",
+      JSON.stringify({
+        words: [
+          {
+            clientId: "w1",
+            word: "",
+            dialect: "حجازي",
+            dialectId: "11111111-1111-4111-8111-111111111111",
+            provisionalMainGroupCode: null,
+            msaSynonym: "",
+            explanation: "",
+            examples: [{ sentence: "" }],
+            referencePromptId: null,
+            referencePromptSnapshot: null,
+          },
+        ],
+        consent: false,
+      }),
+    );
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("حجازي");
+    expect(screen.queryByText(/اخترت دعم اللهجة/)).not.toBeInTheDocument();
+  });
+
+  it("a draft with a different dialect is preserved and offered as a choice instead of being overwritten", async () => {
+    window.localStorage.setItem(
+      "lahajat.contribution.draft.v1",
+      JSON.stringify({
+        words: [
+          {
+            clientId: "w1",
+            word: "كلمة نجدية",
+            dialect: "نجدي",
+            dialectId: "22222222-2222-4222-8222-222222222222",
+            provisionalMainGroupCode: null,
+            msaSynonym: "مرادف محفوظ",
+            explanation: "",
+            examples: [{ sentence: "مثال محفوظ" }],
+            referencePromptId: null,
+            referencePromptSnapshot: null,
+          },
+        ],
+        consent: true,
+      }),
+    );
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+
+    // Not overwritten yet, and every other draft field survives untouched.
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("نجدي");
+    expect(screen.getByLabelText(/الكلمة باللهجة/)).toHaveValue("كلمة نجدية");
+    expect(
+      screen.getByText("اخترت دعم اللهجة الحجازية من لوحة اللهجات."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "استخدام حجازي" }));
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("حجازي");
+    // Confirming the switch still doesn't touch the rest of the draft.
+    expect(screen.getByLabelText(/الكلمة باللهجة/)).toHaveValue("كلمة نجدية");
+    expect(screen.queryByText(/اخترت دعم اللهجة/)).not.toBeInTheDocument();
+  });
+
+  it("choosing to keep the current dialect dismisses the prompt and leaves the draft untouched", async () => {
+    window.localStorage.setItem(
+      "lahajat.contribution.draft.v1",
+      JSON.stringify({
+        words: [
+          {
+            clientId: "w1",
+            word: "",
+            dialect: "نجدي",
+            dialectId: "22222222-2222-4222-8222-222222222222",
+            provisionalMainGroupCode: null,
+            msaSynonym: "",
+            explanation: "",
+            examples: [{ sentence: "" }],
+            referencePromptId: null,
+            referencePromptSnapshot: null,
+          },
+        ],
+        consent: false,
+      }),
+    );
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "الاحتفاظ باللهجة الحالية" }),
+    );
+    expect(screen.getByLabelText(/اللهجة أو المنطقة/)).toHaveValue("نجدي");
+    expect(screen.queryByText(/اخترت دعم اللهجة/)).not.toBeInTheDocument();
+  });
+
+  it("consumes the query prefill once — a later rerender does not reset a dialect the visitor changed by hand", async () => {
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    const dialectInput = screen.getByLabelText(/اللهجة أو المنطقة/);
+    expect(dialectInput).toHaveValue("حجازي");
+
+    fireEvent.change(dialectInput, { target: { value: "جداوي" } });
+    // Any state change elsewhere re-renders the tree; the already-consumed
+    // ?dialect= must not reapply and wipe out the hand-typed value.
+    await user.type(screen.getByLabelText(/الكلمة باللهجة/), "كلمة");
+    expect(dialectInput).toHaveValue("جداوي");
+  });
+
+  it("does not submit anything automatically as part of prefilling", () => {
+    const fetchSpy = vi.spyOn(window, "fetch");
+    mockSearchParams = new URLSearchParams("dialect=hijazi");
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

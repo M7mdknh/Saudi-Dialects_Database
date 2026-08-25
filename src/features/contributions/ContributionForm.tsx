@@ -104,13 +104,44 @@ export function ContributionForm({
   const [promptsError, setPromptsError] = useState(initialPrompts === null);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [dialectOptions, setDialectOptions] = useState(initialDialectOptions);
+  const [pendingDialectPrefill, setPendingDialectPrefill] = useState<{
+    code: MainGroupCode;
+    label: string;
+    dialectId: string | null;
+  } | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
   const idempotencyKey = useRef<string>("");
   const firstErrorRef = useRef<HTMLDivElement | null>(null);
   const firstGuidedCardRef = useRef<HTMLDivElement | null>(null);
+  const baseCardRef = useRef<HTMLDivElement | null>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
   const hydrated = useRef(false);
   const searchParams = useSearchParams();
-  const appliedDialectParam = useRef<string | null>(null);
+  const consumedDialectParam = useRef<string | null>(null);
+
+  function focusBaseCardWordInput() {
+    requestAnimationFrame(() => {
+      const input =
+        baseCardRef.current?.querySelector<HTMLInputElement>("input");
+      if (input && !input.value) input.focus();
+    });
+  }
+
+  /** Drops ?dialect= once it's been handled, keeping #contribute and any
+   * other query params — never a full navigation (no remount, no history
+   * entry), just tidying the address bar. */
+  function stripDialectQueryParam() {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("dialect")) return;
+    url.searchParams.delete("dialect");
+    const query = url.searchParams.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+  }
 
   // "#contribute" must both scroll to and move keyboard focus onto the
   // contribution section — a same-page Link click only triggers a
@@ -136,22 +167,82 @@ export function ContributionForm({
       window.removeEventListener("hashchange", focusContributeSection);
   }, []);
 
-  // ?dialect=<code> preselects the first word card's main group — only the
-  // five known Saudi group codes are accepted, never an arbitrary database
-  // identifier, and it never overwrites a dialect the visitor already
-  // entered (see batch-reducer's PRESELECT_MAIN_GROUP guard).
+  // ?dialect=<code> preselects the first word card's main group, from
+  // "ساند لهجتك" on a leaderboard item. Only the five known Saudi group
+  // codes are accepted — never an arbitrary database identifier — and it
+  // resolves to the *trusted existing* main-group dialect row (never a
+  // custom/provisional one) so it renders as a normal, editable selection.
+  //
+  // Draft safety: an empty base card gets it immediately; a draft already
+  // holding the same dialect is left alone; a draft holding something else
+  // is preserved and offered as an explicit choice instead of being
+  // silently overwritten (see pendingDialectPrefill below). Gated on
+  // draftReady so this runs only after the mount effect's own possible
+  // LOAD_DRAFT has actually been applied to `state` — otherwise this could
+  // race ahead of a restored draft and misjudge it as "empty".
   useEffect(() => {
     // Outside a real Next.js router context (unit tests render this
     // component in isolation) useSearchParams() has nothing to read from.
-    if (!searchParams) return;
+    if (!searchParams || !draftReady) return;
     const dialectParam = searchParams.get("dialect");
-    if (!dialectParam || dialectParam === appliedDialectParam.current) return;
-    if (!isMainGroupCode(dialectParam)) return;
-    appliedDialectParam.current = dialectParam;
+    if (!dialectParam || dialectParam === consumedDialectParam.current) return;
+
+    if (!isMainGroupCode(dialectParam)) {
+      consumedDialectParam.current = dialectParam;
+      stripDialectQueryParam();
+      return;
+    }
+
+    // dialectOptions may still be loading (server-provided list was empty
+    // and the client retry hasn't resolved yet) — wait for it rather than
+    // falling back to an untrusted/custom entry.
+    if (dialectOptions.length === 0) return;
+
+    const trusted = dialectOptions.find(
+      (o) => o.mainGroupCode === dialectParam && o.parentId === null,
+    );
     const label =
-      MAIN_GROUP_OPTIONS.find((g) => g.code === dialectParam)?.labelAr ?? "";
-    dispatch({ type: "PRESELECT_MAIN_GROUP", code: dialectParam, label });
-  }, [searchParams]);
+      trusted?.nameAr ??
+      MAIN_GROUP_OPTIONS.find((g) => g.code === dialectParam)?.labelAr ??
+      "";
+
+    consumedDialectParam.current = dialectParam;
+    stripDialectQueryParam();
+
+    const currentDialect = state.words[0]?.dialect.trim() ?? "";
+    const alreadySame =
+      currentDialect === label ||
+      (trusted !== undefined && state.words[0]?.dialectId === trusted.id);
+
+    if (!currentDialect || alreadySame) {
+      dispatch({
+        type: "PRESELECT_MAIN_GROUP",
+        code: dialectParam,
+        label,
+        dialectId: trusted?.id ?? null,
+      });
+      if (!currentDialect) focusBaseCardWordInput();
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingDialectPrefill({
+        code: dialectParam,
+        label,
+        dialectId: trusted?.id ?? null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, dialectOptions, draftReady]);
+
+  function applyPendingDialectPrefill() {
+    if (!pendingDialectPrefill) return;
+    dispatch({ type: "PRESELECT_MAIN_GROUP", ...pendingDialectPrefill });
+    setPendingDialectPrefill(null);
+    focusBaseCardWordInput();
+  }
+
+  function dismissPendingDialectPrefill() {
+    setPendingDialectPrefill(null);
+  }
 
   async function loadBatch(offset: number) {
     setPromptsLoading(true);
@@ -206,6 +297,7 @@ export function ContributionForm({
       });
     }
     hydrated.current = true;
+    setDraftReady(true);
   }, []);
 
   useEffect(() => {
@@ -447,6 +539,35 @@ export function ContributionForm({
         </p>
       ) : null}
 
+      {pendingDialectPrefill ? (
+        <div
+          role="status"
+          className="border-border bg-surface-muted flex flex-col gap-2 rounded-lg px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>
+            اخترت دعم اللهجة{" "}
+            {MAIN_GROUP_FEMININE_LABELS[pendingDialectPrefill.code]} من لوحة
+            اللهجات.
+          </span>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={applyPendingDialectPrefill}
+            >
+              استخدام {pendingDialectPrefill.label}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={dismissPendingDialectPrefill}
+            >
+              الاحتفاظ باللهجة الحالية
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {status === "error" && errorCode ? (
         <div
           role="alert"
@@ -464,7 +585,10 @@ export function ContributionForm({
             <div
               key={card.clientId}
               ref={(el) => {
-                if (index === 0 && cardErrors) firstErrorRef.current = el;
+                if (index === 0) {
+                  baseCardRef.current = el;
+                  if (cardErrors) firstErrorRef.current = el;
+                }
                 if (isFirstGuided) firstGuidedCardRef.current = el;
               }}
             >

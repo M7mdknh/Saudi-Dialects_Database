@@ -52,7 +52,15 @@ export type BatchAction =
       clientId: string;
       value: string;
     }
-  | { type: "PRESELECT_MAIN_GROUP"; code: string; label: string }
+  | {
+      type: "PRESELECT_MAIN_GROUP";
+      code: string;
+      label: string;
+      /** The trusted existing main-group dialect row's id, when resolved —
+       * never a raw client-supplied value. Null falls back to a
+       * provisional-group entry (see the case below). */
+      dialectId: string | null;
+    }
   | { type: "ADD_EXAMPLE"; clientId: string }
   | { type: "REMOVE_EXAMPLE"; clientId: string; index: number }
   | { type: "UPDATE_EXAMPLE"; clientId: string; index: number; value: string }
@@ -161,20 +169,24 @@ export function batchReducer(
       };
     }
     case "PRESELECT_MAIN_GROUP": {
-      // Only touches the first (base) card, and only while it's still
-      // pristine — never overwrites a dialect the visitor already
-      // typed/chose, or a restored draft's own selection.
+      // Only ever touches the first (base) card. The caller (ContributionForm)
+      // owns the decision of *whether* it's safe to apply — an empty card,
+      // an already-matching draft, or an explicit "استخدام <لهجة>" click
+      // after showing the visitor a choice — this reducer just applies it.
+      // dialectId set (the trusted existing main-group row) means this is a
+      // normal, editable selection, not a custom/provisional dialect.
       const [firstWord, ...restWords] = state.words;
-      if (!firstWord || firstWord.dialect) return state;
+      if (!firstWord) return state;
       return {
         ...state,
         words: [
           {
             ...firstWord,
             dialect: action.label,
-            dialectId: null,
-            provisionalMainGroupCode:
-              action.code as WordCardInput["provisionalMainGroupCode"],
+            dialectId: action.dialectId,
+            provisionalMainGroupCode: action.dialectId
+              ? null
+              : (action.code as WordCardInput["provisionalMainGroupCode"]),
           },
           ...restWords,
         ],
