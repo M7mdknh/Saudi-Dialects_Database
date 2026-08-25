@@ -22,7 +22,7 @@ interface SubmissionDetail {
   id: string;
   submitted_word: string;
   submitted_dialect: string;
-  submitted_msa_synonym: string;
+  submitted_msa_synonym: string | null;
   submitted_explanation: string | null;
   review_status: ReviewStatus;
   created_at: string;
@@ -100,7 +100,7 @@ export function ReviewDetail({
   const [canonicalWord, setCanonicalWord] = useState(submission.submitted_word);
   const [dialectId, setDialectId] = useState(dialects[0]?.id ?? "");
   const [msaSynonym, setMsaSynonym] = useState(
-    submission.submitted_msa_synonym,
+    submission.submitted_msa_synonym ?? "",
   );
   const [explanation, setExplanation] = useState(
     submission.submitted_explanation ?? "",
@@ -132,7 +132,7 @@ export function ReviewDetail({
           expectedVersion: null,
           word: canonicalWord,
           dialectId,
-          msaSynonyms: [msaSynonym],
+          msaSynonyms: msaSynonym.trim() ? [msaSynonym.trim()] : [],
           explanation,
           editorialStatus: "approved",
           referencePromptId: submission.reference_prompt_id,
@@ -186,7 +186,7 @@ export function ReviewDetail({
           </div>
           <div>
             <dt className="text-foreground/60 text-xs">المرادف الفصيح</dt>
-            <dd>{submission.submitted_msa_synonym}</dd>
+            <dd>{submission.submitted_msa_synonym || "—"}</dd>
           </div>
           <div>
             <dt className="text-foreground/60 text-xs">المعنى</dt>

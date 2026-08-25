@@ -53,4 +53,31 @@ describe("getGuidedPrompts", () => {
     rpcMock.mockResolvedValueOnce({ data: null, error: new Error("boom") });
     await expect(getGuidedPrompts([])).rejects.toThrow();
   });
+
+  it("propagates a missing-table error (undeployed migration) instead of an empty set", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'relation "reference_prompts" does not exist',
+        code: "42P01",
+      },
+    });
+    await expect(getGuidedPrompts([])).rejects.toBeTruthy();
+  });
+
+  it("propagates an RLS-denial error instead of an empty set", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "permission denied for function list_active_reference_prompts",
+        code: "42501",
+      },
+    });
+    await expect(getGuidedPrompts([])).rejects.toBeTruthy();
+  });
+
+  it("returns a genuine empty array (not a throw) when the RPC succeeds with no active rows", async () => {
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    await expect(getGuidedPrompts([])).resolves.toEqual([]);
+  });
 });

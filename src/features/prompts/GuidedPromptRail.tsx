@@ -7,12 +7,17 @@ interface GuidedPromptRailProps {
   prompts: GuidedPromptRecord[];
   onChoose: (prompt: GuidedPromptRecord) => void;
   loading?: boolean;
+  /** True when the last fetch (initial load or refresh) failed — distinct from a genuine empty result. */
+  error?: boolean;
+  onRetry?: () => void;
 }
 
 export function GuidedPromptRail({
   prompts,
   onChoose,
   loading,
+  error,
+  onRetry,
 }: GuidedPromptRailProps) {
   return (
     <section
@@ -42,6 +47,20 @@ export function GuidedPromptRail({
               className="border-border bg-surface-muted h-32 animate-pulse rounded-2xl border"
             />
           ))}
+        </div>
+      ) : error ? (
+        <div
+          role="alert"
+          className="border-border bg-surface-muted flex flex-col items-center gap-3 rounded-xl border px-4 py-6 text-center text-sm"
+        >
+          <p className="text-foreground/70">
+            تعذّر تحميل الاقتراحات الآن. يمكنك إضافة كلمتك مباشرة في الأسفل.
+          </p>
+          {onRetry ? (
+            <Button type="button" variant="secondary" onClick={onRetry}>
+              إعادة المحاولة
+            </Button>
+          ) : null}
         </div>
       ) : prompts.length === 0 ? (
         <p className="border-border bg-surface-muted text-foreground/60 rounded-xl border px-4 py-6 text-center text-sm">

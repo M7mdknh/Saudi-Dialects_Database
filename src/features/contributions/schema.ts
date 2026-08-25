@@ -38,11 +38,12 @@ export const wordCardSchema = z.object({
   msaSynonym: z
     .string()
     .trim()
-    .min(1, "المرادف بالفصحى مطلوب")
     .max(
       FIELD_LIMITS.msaSynonym,
       `الحد الأقصى ${FIELD_LIMITS.msaSynonym} حرفاً`,
-    ),
+    )
+    .optional()
+    .or(z.literal("")),
   explanation: z
     .string()
     .trim()

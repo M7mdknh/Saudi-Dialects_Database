@@ -108,7 +108,7 @@ test.describe("guided contribution journey", () => {
       .first()
       .fill("نجدي");
     await page
-      .getByLabel(/مرادفها بالعربية الفصحى/)
+      .getByLabel(/المرادف بالعربية الفصحى/)
       .first()
       .fill("مرادف");
     await page

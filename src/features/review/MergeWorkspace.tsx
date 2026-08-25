@@ -15,7 +15,7 @@ interface SubmissionRow {
   id: string;
   submitted_word: string;
   submitted_dialect: string;
-  submitted_msa_synonym: string;
+  submitted_msa_synonym: string | null;
   submitted_explanation: string | null;
   raw_examples: ExampleRow[];
   reference_prompt_id: string | null;
@@ -38,7 +38,7 @@ export function MergeWorkspace({
   const [word, setWord] = useState(submissions[0].submitted_word);
   const [dialectId, setDialectId] = useState(dialects[0]?.id ?? "");
   const [msaSynonym, setMsaSynonym] = useState(
-    submissions[0].submitted_msa_synonym,
+    submissions[0].submitted_msa_synonym ?? "",
   );
   const [explanation, setExplanation] = useState(
     submissions[0].submitted_explanation ?? "",
@@ -77,7 +77,7 @@ export function MergeWorkspace({
           targetEntryId: null,
           word,
           dialectId,
-          msaSynonyms: [msaSynonym],
+          msaSynonyms: msaSynonym.trim() ? [msaSynonym.trim()] : [],
           explanation,
           examples,
           referencePromptId:
@@ -107,7 +107,7 @@ export function MergeWorkspace({
               اللهجة المُدخلة: {s.submitted_dialect}
             </p>
             <p className="text-foreground/70 text-sm">
-              المرادف: {s.submitted_msa_synonym}
+              المرادف: {s.submitted_msa_synonym || "—"}
             </p>
             {s.submitted_explanation ? (
               <p className="text-foreground/70 text-sm">

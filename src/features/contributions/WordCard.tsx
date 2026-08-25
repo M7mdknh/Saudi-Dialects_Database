@@ -1,13 +1,11 @@
 "use client";
 
 import type { WordCardInput } from "./schema";
-import {
-  FIELD_LIMITS,
-  MAX_EXAMPLES_PER_WORD,
-  SUGGESTED_DIALECTS,
-} from "./constants";
+import { FIELD_LIMITS, MAX_EXAMPLES_PER_WORD } from "./constants";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { DialectCombobox } from "./DialectCombobox";
+import type { PublicDialectOption } from "./dialects-actions";
 
 export type FieldErrors = Record<string, string | undefined>;
 
@@ -16,6 +14,7 @@ interface WordCardProps {
   total: number;
   card: WordCardInput;
   errors?: FieldErrors;
+  dialectOptions: PublicDialectOption[];
   onUpdateField: (
     field: "word" | "dialect" | "msaSynonym" | "explanation",
     value: string,
@@ -35,6 +34,7 @@ export function WordCard({
   total,
   card,
   errors = {},
+  dialectOptions,
   onUpdateField,
   onUpdateExample,
   onAddExample,
@@ -135,27 +135,18 @@ export function WordCard({
         required
         error={errors.dialect}
       >
-        <input
+        <DialectCombobox
           id={`${base}-dialect`}
-          list={`${base}-dialect-options`}
           value={card.dialect}
-          maxLength={FIELD_LIMITS.dialect}
-          placeholder="اكتب اللهجة أو المنطقة"
-          onChange={(e) => onUpdateField("dialect", e.target.value)}
-          className={inputClass(Boolean(errors.dialect))}
-          aria-invalid={Boolean(errors.dialect)}
+          options={dialectOptions}
+          onChange={(value) => onUpdateField("dialect", value)}
+          error={errors.dialect}
         />
-        <datalist id={`${base}-dialect-options`}>
-          {SUGGESTED_DIALECTS.map((d) => (
-            <option key={d} value={d} />
-          ))}
-        </datalist>
       </Field>
 
       <Field
         id={`${base}-msa`}
-        label="مرادفها بالعربية الفصحى"
-        required
+        label="المرادف بالعربية الفصحى"
         error={errors.msaSynonym}
       >
         {isGuided ? (
@@ -168,7 +159,7 @@ export function WordCard({
         ) : (
           <input
             id={`${base}-msa`}
-            value={card.msaSynonym}
+            value={card.msaSynonym ?? ""}
             maxLength={FIELD_LIMITS.msaSynonym}
             onChange={(e) => onUpdateField("msaSynonym", e.target.value)}
             className={inputClass(Boolean(errors.msaSynonym))}

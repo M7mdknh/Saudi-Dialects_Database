@@ -88,6 +88,14 @@ describe("serializer determinism", () => {
     );
   });
 
+  it("serializes a canonical entry with no formal-Arabic synonym (now optional) as an empty array, not null/undefined", () => {
+    const [record] = projectToExportV1([entry({ canonical_msa_synonyms: [] })]);
+    expect(record.msa_synonyms).toEqual([]);
+    expect(() =>
+      serializeJson([record], "2026-01-01T00:00:00.000Z"),
+    ).not.toThrow();
+  });
+
   it("v1 output never contains schema v2's additive fields", () => {
     const [record] = projectToExportV1([
       entry({ main_group_code: "hijazi", main_group_label_ar: "حجازي" }),

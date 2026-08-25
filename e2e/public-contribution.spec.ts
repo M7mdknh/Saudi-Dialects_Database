@@ -28,7 +28,7 @@ test.describe("public contribution journey", () => {
       .first()
       .fill("حجازي");
     await page
-      .getByLabel(/مرادفها بالعربية الفصحى/)
+      .getByLabel(/المرادف بالعربية الفصحى/)
       .first()
       .fill("بلا هدف");
     await page.getByLabel("مثال في جملة").first().fill("راح يمشي سبهللة");
@@ -43,7 +43,7 @@ test.describe("public contribution journey", () => {
       .nth(1)
       .fill("سوداني");
     await page
-      .getByLabel(/مرادفها بالعربية الفصحى/)
+      .getByLabel(/المرادف بالعربية الفصحى/)
       .nth(1)
       .fill("شخص");
     await page.getByLabel("مثال في جملة").nth(1).fill("الزول ده طيب");
@@ -90,7 +90,7 @@ test.describe("public contribution journey", () => {
       .first()
       .fill("حجازي");
     await page
-      .getByLabel(/مرادفها بالعربية الفصحى/)
+      .getByLabel(/المرادف بالعربية الفصحى/)
       .first()
       .fill("مرادف");
     await page.getByRole("checkbox").check();

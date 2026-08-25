@@ -14,23 +14,3 @@ export const CONSENT_VERSION = "v1";
 export const DRAFT_STORAGE_KEY = "lahajat.contribution.draft.v1";
 export const IDEMPOTENCY_STORAGE_KEY =
   "lahajat.contribution.idempotency-key.v1";
-
-export const SUGGESTED_DIALECTS = [
-  "جداوي",
-  "مكي",
-  "مديني",
-  "طائفي",
-  "قصيمي",
-  "عارضي",
-  "سديري",
-  "حساوي",
-  "قطيفي",
-  "دمامي",
-  "حائلي",
-  "جوفي",
-  "تبوكي",
-  "عسيري",
-  "جازاني",
-  "باحي",
-  "نجراني",
-] as const;

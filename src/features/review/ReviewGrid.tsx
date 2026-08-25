@@ -17,7 +17,7 @@ interface SubmissionRow {
   id: string;
   submitted_word: string;
   submitted_dialect: string;
-  submitted_msa_synonym: string;
+  submitted_msa_synonym: string | null;
   review_status: ReviewStatus;
   created_at: string;
   updated_at: string;
@@ -276,7 +276,7 @@ export function ReviewGrid({
                   </td>
                   <td className="p-2 font-medium">{row.submitted_word}</td>
                   <td className="p-2">{row.submitted_dialect}</td>
-                  <td className="p-2">{row.submitted_msa_synonym}</td>
+                  <td className="p-2">{row.submitted_msa_synonym || "—"}</td>
                   <td className="p-2">
                     <StatusBadge status={row.review_status} />
                   </td>

@@ -37,6 +37,31 @@ describe("wordCardSchema", () => {
       wordCardSchema.safeParse(makeWord({ explanation: "" })).success,
     ).toBe(true);
   });
+
+  it("allows an empty formal-Arabic synonym (optional for ordinary submissions)", () => {
+    expect(wordCardSchema.safeParse(makeWord({ msaSynonym: "" })).success).toBe(
+      true,
+    );
+  });
+
+  it("allows an omitted formal-Arabic synonym", () => {
+    const word = makeWord();
+    delete (word as { msaSynonym?: string }).msaSynonym;
+    expect(wordCardSchema.safeParse(word).success).toBe(true);
+  });
+
+  it("still accepts a provided formal-Arabic synonym (guided contributions)", () => {
+    expect(
+      wordCardSchema.safeParse(makeWord({ msaSynonym: "بلا هدف" })).success,
+    ).toBe(true);
+  });
+
+  it("rejects a formal-Arabic synonym over the length limit", () => {
+    const result = wordCardSchema.safeParse(
+      makeWord({ msaSynonym: "أ".repeat(201) }),
+    );
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("submissionBatchSchema", () => {

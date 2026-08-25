@@ -4,6 +4,7 @@ export const SUBMISSION_ERROR_CODES = {
   RATE_LIMITED: "RATE_LIMITED",
   PAYLOAD_TOO_LARGE: "PAYLOAD_TOO_LARGE",
   DUPLICATE_IGNORED: "DUPLICATE_IGNORED",
+  DB_UNAVAILABLE: "DB_UNAVAILABLE",
   SERVER_ERROR: "SERVER_ERROR",
 } as const;
 
@@ -16,6 +17,7 @@ export const SUBMISSION_ERROR_MESSAGES: Record<SubmissionErrorCode, string> = {
   RATE_LIMITED: "تم إرسال عدد كبير من المساهمات مؤخراً. حاول لاحقاً.",
   PAYLOAD_TOO_LARGE: "المحتوى المرسل كبير جداً. قلّل عدد الكلمات أو الأمثلة.",
   DUPLICATE_IGNORED: "تم استلام هذه المساهمة مسبقاً بنجاح.",
+  DB_UNAVAILABLE: "قاعدة البيانات غير متاحة مؤقتاً. حاول مرة أخرى بعد قليل.",
   SERVER_ERROR: "حدث خطأ غير متوقع. حاول مرة أخرى بعد قليل.",
 };
 

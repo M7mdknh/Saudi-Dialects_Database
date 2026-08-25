@@ -41,7 +41,7 @@ export interface Database {
         batch_id: string;
         submitted_word: string;
         submitted_dialect: string;
-        submitted_msa_synonym: string;
+        submitted_msa_synonym: string | null;
         submitted_explanation: string | null;
         word_search_key: string;
         dialect_search_key: string;
@@ -340,6 +340,16 @@ export interface Database {
       reference_prompt_submission_counts: {
         Args: { p_actor: string };
         Returns: { reference_prompt_id: string; submission_count: number }[];
+      };
+      list_public_dialects: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          name_ar: string;
+          slug: string;
+          parent_id: string | null;
+          main_group_code: MainDialectGroupCode | null;
+        }[];
       };
     };
     Enums: Record<string, never>;

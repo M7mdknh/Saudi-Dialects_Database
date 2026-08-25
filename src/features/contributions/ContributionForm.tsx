@@ -16,7 +16,15 @@ import { messageForCode } from "./errors";
 import { mapZodIssuesToFieldErrors } from "./field-errors";
 import { CONSENT_VERSION, MAX_WORD_CARDS } from "./constants";
 import { Button } from "@/components/ui/Button";
-import { Turnstile } from "./Turnstile";
+import {
+  Turnstile,
+  type TurnstileHandle,
+  type TurnstileStatus,
+} from "./Turnstile";
+import {
+  listPublicDialects,
+  type PublicDialectOption,
+} from "./dialects-actions";
 import { GuidedPromptRail } from "@/features/prompts/GuidedPromptRail";
 import { getGuidedPrompts } from "@/features/prompts/actions";
 import {
@@ -31,9 +39,12 @@ type Status = "idle" | "submitting" | "success" | "error";
 export function ContributionForm({
   turnstileSiteKey,
   initialPrompts,
+  initialDialectOptions,
 }: {
   turnstileSiteKey?: string;
-  initialPrompts: GuidedPromptRecord[];
+  /** null means the server-side load failed — a real error, not a genuine empty result. */
+  initialPrompts: GuidedPromptRecord[] | null;
+  initialDialectOptions: PublicDialectOption[];
 }) {
   const [state, dispatch] = useReducer(
     batchReducer,
@@ -47,11 +58,16 @@ export function ContributionForm({
   >({});
   const [draftRestored, setDraftRestored] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string>();
-  const [prompts, setPrompts] = useState(initialPrompts);
+  const [turnstileStatus, setTurnstileStatus] =
+    useState<TurnstileStatus>("loading");
+  const [prompts, setPrompts] = useState(initialPrompts ?? []);
   const [promptsLoading, setPromptsLoading] = useState(false);
+  const [promptsError, setPromptsError] = useState(initialPrompts === null);
+  const [dialectOptions, setDialectOptions] = useState(initialDialectOptions);
   const idempotencyKey = useRef<string>("");
   const firstErrorRef = useRef<HTMLDivElement | null>(null);
   const firstGuidedCardRef = useRef<HTMLDivElement | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -59,7 +75,7 @@ export function ContributionForm({
     // hydrate form state; this is not derivable via a useState initializer
     // without a server/client hydration mismatch.
     idempotencyKey.current = getOrCreateIdempotencyKey();
-    recordShownIds(initialPrompts.map((p) => p.id));
+    if (initialPrompts) recordShownIds(initialPrompts.map((p) => p.id));
     const draft = loadDraft();
     if (draft && draft.words.length > 0) {
       dispatch({
@@ -90,15 +106,28 @@ export function ContributionForm({
     }
   }, [fieldErrors]);
 
+  // The dialect list failing server-side (network blip, cold RPC) is not
+  // fatal — the combobox still works as a free-text field — but retry once
+  // client-side so a transient failure doesn't permanently hide the taxonomy.
+  useEffect(() => {
+    if (initialDialectOptions.length > 0) return;
+    listPublicDialects()
+      .then(setDialectOptions)
+      .catch(() => {
+        // Non-fatal: dialect field still accepts free text.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function refreshPrompts() {
     setPromptsLoading(true);
     try {
       const next = await getGuidedPrompts(getExclusionIds());
       setPrompts(next);
+      setPromptsError(false);
       recordShownIds(next.map((p) => p.id));
     } catch {
-      // Non-fatal: the guided rail simply stays empty/stale; ordinary
-      // contribution still works.
+      setPromptsError(true);
     } finally {
       setPromptsLoading(false);
     }
@@ -116,6 +145,19 @@ export function ContributionForm({
       input?.focus();
     });
   }
+
+  function onTurnstileStatusChange(nextStatus: TurnstileStatus) {
+    setTurnstileStatus(nextStatus);
+    if (nextStatus !== "verified") setTurnstileToken(undefined);
+  }
+
+  const turnstileRequired = Boolean(turnstileSiteKey);
+  const turnstileBlocked =
+    turnstileRequired &&
+    (turnstileStatus === "error" ||
+      turnstileStatus === "expired" ||
+      turnstileStatus === "timeout");
+  const turnstileNotReady = turnstileRequired && !turnstileToken;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -148,6 +190,7 @@ export function ContributionForm({
       clearDraft();
       rotateIdempotencyKey();
       setStatus("success");
+      turnstileRef.current?.reset();
       void refreshPrompts();
       return;
     }
@@ -155,6 +198,9 @@ export function ContributionForm({
     setErrorCode(result.code);
     if (result.fieldErrors) setFieldErrors(result.fieldErrors);
     setStatus("error");
+    if (result.code === "TURNSTILE_FAILED") {
+      turnstileRef.current?.reset();
+    }
   }
 
   function startAnother() {
@@ -188,6 +234,8 @@ export function ContributionForm({
         <GuidedPromptRail
           prompts={prompts}
           loading={promptsLoading}
+          error={promptsError}
+          onRetry={refreshPrompts}
           onChoose={startAnotherWithPrompt}
         />
       </div>
@@ -217,6 +265,8 @@ export function ContributionForm({
       <GuidedPromptRail
         prompts={prompts}
         loading={promptsLoading}
+        error={promptsError}
+        onRetry={refreshPrompts}
         onChoose={chooseGuidedPrompt}
       />
 
@@ -255,6 +305,7 @@ export function ContributionForm({
                 total={state.words.length}
                 card={card}
                 errors={cardErrors}
+                dialectOptions={dialectOptions}
                 canRemove={state.words.length > 1}
                 onUpdateField={(field, value) =>
                   dispatch({
@@ -345,12 +396,22 @@ export function ContributionForm({
       </label>
 
       {turnstileSiteKey ? (
-        <Turnstile siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+        <Turnstile
+          ref={turnstileRef}
+          siteKey={turnstileSiteKey}
+          onToken={setTurnstileToken}
+          onStatusChange={onTurnstileStatusChange}
+        />
       ) : null}
 
       <Button
         type="submit"
-        disabled={status === "submitting" || !state.consent}
+        disabled={
+          status === "submitting" ||
+          !state.consent ||
+          turnstileBlocked ||
+          turnstileNotReady
+        }
         className="w-full"
       >
         {status === "submitting" ? "جارٍ الإرسال…" : "إرسال المساهمة"}
