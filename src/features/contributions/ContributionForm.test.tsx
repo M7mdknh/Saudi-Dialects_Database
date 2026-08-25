@@ -292,6 +292,221 @@ describe("ContributionForm", () => {
   });
 });
 
+describe("ContributionForm multi-word validation", () => {
+  async function fillWord(
+    user: ReturnType<typeof userEvent.setup>,
+    index: number,
+    {
+      word,
+      dialect,
+      example,
+    }: { word: string; dialect: string; example?: string },
+  ) {
+    const wordInputs = screen.getAllByLabelText(/الكلمة باللهجة/);
+    const dialectInputs = screen.getAllByLabelText(/اللهجة أو المنطقة/);
+    const exampleInputs = screen.getAllByLabelText("مثال في جملة");
+    if (word) await user.type(wordInputs[index], word);
+    if (dialect) await user.type(dialectInputs[index], dialect);
+    if (example) await user.type(exampleInputs[index], example);
+  }
+
+  it("submits three ordinary words, each retaining its own example", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ batchId: "11111111-1111-1111-1111-111111111111" }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+
+    for (let i = 0; i < 3; i++) {
+      await fillWord(user, i, {
+        word: `كلمة${i}`,
+        dialect: "حجازي",
+        example: `جملة رقم ${i}`,
+      });
+    }
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "إرسال المساهمة" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.words).toHaveLength(3);
+    body.words.forEach((w: { examples: unknown[] }, i: number) => {
+      expect(w.examples).toHaveLength(1);
+      expect((w.examples[0] as { sentence: string }).sentence).toBe(
+        `جملة رقم ${i}`,
+      );
+    });
+  });
+
+  it("submits ten ordinary words within the batch", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ batchId: "11111111-1111-1111-1111-111111111111" }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    for (let i = 0; i < 9; i++) {
+      await user.click(
+        screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }),
+      );
+    }
+    for (let i = 0; i < 10; i++) {
+      await fillWord(user, i, {
+        word: `كلمة${i}`,
+        dialect: "حجازي",
+        example: `جملة رقم ${i}`,
+      });
+    }
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "إرسال المساهمة" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.words).toHaveLength(10);
+  }, 15000);
+
+  it("a fourth word's validation error never appears under the third word, and correcting word 3 does not clear word 4's error", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    for (let i = 0; i < 3; i++) {
+      await user.click(
+        screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }),
+      );
+    }
+    // Words 1-3 fully valid; word 4 left with a blank word field.
+    for (let i = 0; i < 3; i++) {
+      await fillWord(user, i, {
+        word: `كلمة${i}`,
+        dialect: "حجازي",
+        example: `جملة رقم ${i}`,
+      });
+    }
+    await fillWord(user, 3, { word: "", dialect: "حجازي", example: "جملة" });
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "إرسال المساهمة" }));
+
+    expect(screen.getByText("الكلمة مطلوبة")).toBeInTheDocument();
+    // Not misattributed to word 3.
+    const word3Heading = screen.getByText("الكلمة ٣");
+    const word3Section = word3Heading.closest("section");
+    expect(word3Section).not.toHaveTextContent("الكلمة مطلوبة");
+
+    const word4Heading = screen.getByText("الكلمة ٤");
+    const word4Section = word4Heading.closest("section");
+    expect(word4Section).toHaveTextContent("الكلمة مطلوبة");
+  });
+
+  it("a stale error does not reattach to a different (filled) card after reordering", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+
+    // Words 1 and 2 fully valid; word 3 left with a blank example.
+    await fillWord(user, 0, {
+      word: "كلمة0",
+      dialect: "حجازي",
+      example: "جملة صحيحة 0",
+    });
+    await fillWord(user, 1, {
+      word: "كلمة1",
+      dialect: "حجازي",
+      example: "جملة صحيحة 1",
+    });
+    await fillWord(user, 2, { word: "كلمة2", dialect: "حجازي" });
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "إرسال المساهمة" }));
+    expect(
+      screen.getByText("أدخل مثالاً أو احذف هذا الحقل"),
+    ).toBeInTheDocument();
+
+    // Move word 3 (invalid) to the front, pushing the two valid, filled
+    // words down into the positions the stale error used to occupy.
+    const moveUp = () =>
+      screen.getAllByRole("button", { name: "نقل الكلمة للأعلى" });
+    await user.click(moveUp()[2]);
+    await user.click(moveUp()[1]);
+
+    // The filled examples must never show the blank-example error.
+    expect(screen.getByDisplayValue("جملة صحيحة 0")).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(screen.getByDisplayValue("جملة صحيحة 1")).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
+
+  it("removing a middle card preserves the remaining cards' values and errors", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+    await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
+
+    await fillWord(user, 0, {
+      word: "كلمة0",
+      dialect: "حجازي",
+      example: "جملة 0",
+    });
+    await fillWord(user, 1, {
+      word: "كلمة1",
+      dialect: "حجازي",
+      example: "جملة 1",
+    });
+    await fillWord(user, 2, {
+      word: "كلمة2",
+      dialect: "حجازي",
+      example: "جملة 2",
+    });
+
+    await user.click(screen.getByRole("button", { name: "حذف الكلمة ٢" }));
+
+    const remainingWords = screen.getAllByLabelText(/الكلمة باللهجة/);
+    expect(remainingWords).toHaveLength(2);
+    expect(remainingWords[0]).toHaveValue("كلمة0");
+    expect(remainingWords[1]).toHaveValue("كلمة2");
+    const remainingExamples = screen.getAllByLabelText("مثال في جملة");
+    expect(remainingExamples[0]).toHaveValue("جملة 0");
+    expect(remainingExamples[1]).toHaveValue("جملة 2");
+  });
+});
+
 describe("ContributionForm dialect combobox", () => {
   it("lets a visitor pick a main dialect group from the pinned list", async () => {
     const user = userEvent.setup();

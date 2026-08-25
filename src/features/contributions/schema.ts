@@ -16,11 +16,16 @@ export const referencePromptSnapshotSchema = z.object({
   capturedAt: z.string(),
 });
 
+// No per-item `.min(1)` here: a blank optional extra example row (e.g. an
+// unfilled row left over from "+ إضافة مثال") must not by itself fail
+// validation — only the whole-array check below (at least one non-blank
+// example per word) enforces that. Validating each row in place, before any
+// blank rows are dropped, keeps every issue's array index pointing at the
+// same position the contributor sees on screen.
 export const exampleSchema = z.object({
   sentence: z
     .string()
     .trim()
-    .min(1, "أدخل مثالاً أو احذف هذا الحقل")
     .max(FIELD_LIMITS.example, `الحد الأقصى ${FIELD_LIMITS.example} حرفاً`),
 });
 
@@ -62,7 +67,28 @@ export const wordCardSchema = z
     examples: z
       .array(exampleSchema)
       .min(1, "أضف مثالاً واحداً على الأقل")
-      .max(MAX_EXAMPLES_PER_WORD, `الحد الأقصى ${MAX_EXAMPLES_PER_WORD} أمثلة`),
+      .max(MAX_EXAMPLES_PER_WORD, `الحد الأقصى ${MAX_EXAMPLES_PER_WORD} أمثلة`)
+      .superRefine((examples, ctx) => {
+        // Every item already passed its own (length-only) check above, so
+        // this only runs once positions are settled — safe to report at a
+        // fixed index. All-blank is the one whole-array condition: attach it
+        // to the first visible example field, matching where a contributor
+        // would look.
+        const hasContent = examples.some((e) => e.sentence.length > 0);
+        if (!hasContent) {
+          ctx.addIssue({
+            code: "custom",
+            path: [0, "sentence"],
+            message: "أدخل مثالاً أو احذف هذا الحقل",
+          });
+        }
+      })
+      .transform((examples) => {
+        // Now that validation has passed, silently drop blank optional extra
+        // rows from the submitted payload — never send an empty example.
+        const nonBlank = examples.filter((e) => e.sentence.length > 0);
+        return nonBlank.length > 0 ? nonBlank : examples.slice(0, 1);
+      }),
     referencePromptId: z.string().min(1).nullable().optional(),
     referencePromptSnapshot: referencePromptSnapshotSchema
       .nullable()

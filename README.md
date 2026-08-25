@@ -140,6 +140,7 @@ it is reached through the existing Supabase URL/keys.
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | client          | Optional in local dev. If unset, the widget doesn't render and the server skips Turnstile verification (dev-only fallback — see `TURNSTILE_SECRET_KEY` below). |
 | `TURNSTILE_SECRET_KEY`           | server only     | If set, the server _requires and verifies_ a Turnstile token on every submission. Leave unset locally to skip verification.                                    |
 | `ABUSE_HASH_SECRET`              | server only     | HMAC key used to derive a short-lived hash of the requester IP for rate-limiting. Raw IPs are never stored. Generate with `openssl rand -hex 32`.              |
+| `E2E_RATE_LIMIT_BYPASS`          | server only, e2e only | Set to `"1"` **only** by `playwright.config.ts`'s `webServer.env`. The `mobile` and `desktop` Playwright projects share one server process, so the real submission rate limit (5 per 10 minutes) is otherwise exceeded by the e2e suite itself. Guarded by the absence of `VERCEL` — never set this in a real deployment.  |
 
 ## Saudi classification and the leaderboard
 

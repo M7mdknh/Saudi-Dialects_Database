@@ -62,10 +62,13 @@ export async function POST(request: Request) {
     : submissionBatchSchema;
   const parsed = schema.safeParse(rawBody);
   if (!parsed.success) {
+    const words = Array.isArray((rawBody as { words?: unknown })?.words)
+      ? (rawBody as { words: unknown[] }).words
+      : [];
     return NextResponse.json(
       {
         code: "VALIDATION_FAILED",
-        fieldErrors: mapZodIssuesToFieldErrors(parsed.error),
+        fieldErrors: mapZodIssuesToFieldErrors(parsed.error, words),
       },
       { status: 400 },
     );

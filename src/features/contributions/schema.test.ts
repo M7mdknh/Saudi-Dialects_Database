@@ -94,6 +94,101 @@ describe("wordCardSchema", () => {
     );
     expect(result.success).toBe(true);
   });
+
+  describe("example normalization", () => {
+    it("silently drops a blank optional extra example, keeping the valid one", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({ examples: [{ sentence: "جملة صحيحة" }, { sentence: "" }] }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.examples).toEqual([{ sentence: "جملة صحيحة" }]);
+      }
+    });
+
+    it("silently drops a blank example that comes before the valid one", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({ examples: [{ sentence: "" }, { sentence: "جملة صحيحة" }] }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.examples).toEqual([{ sentence: "جملة صحيحة" }]);
+      }
+    });
+
+    it("does not invalidate a word that already has one valid example plus a blank row", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({
+          examples: [
+            { sentence: "جملة صحيحة" },
+            { sentence: "" },
+            { sentence: "" },
+          ],
+        }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.examples).toEqual([{ sentence: "جملة صحيحة" }]);
+      }
+    });
+
+    it("fails, attached to the first example field, when every example is blank", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({ examples: [{ sentence: "" }, { sentence: "" }] }),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find(
+          (i) => i.path.join(".") === "examples.0.sentence",
+        );
+        expect(issue?.message).toBe("أدخل مثالاً أو احذف هذا الحقل");
+      }
+    });
+
+    it("preserves multiple valid examples without combining or removing them", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({
+          examples: [{ sentence: "جملة أولى" }, { sentence: "جملة ثانية" }],
+        }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.examples).toEqual([
+          { sentence: "جملة أولى" },
+          { sentence: "جملة ثانية" },
+        ]);
+      }
+    });
+
+    it("reports an over-length second example at its own index, not the first", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({
+          examples: [{ sentence: "قصيرة" }, { sentence: "أ".repeat(501) }],
+        }),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find(
+          (i) => i.path.join(".") === "examples.1.sentence",
+        );
+        expect(issue).toBeDefined();
+        const wrongIssue = result.error.issues.find(
+          (i) => i.path.join(".") === "examples.0.sentence",
+        );
+        expect(wrongIssue).toBeUndefined();
+      }
+    });
+
+    it("trims surrounding whitespace without altering the reviewed Arabic text", () => {
+      const result = wordCardSchema.safeParse(
+        makeWord({ examples: [{ sentence: "  جملة مع مسافات  " }] }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.examples).toEqual([{ sentence: "جملة مع مسافات" }]);
+      }
+    });
+  });
 });
 
 describe("submissionBatchSchema", () => {

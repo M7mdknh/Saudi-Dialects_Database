@@ -387,7 +387,7 @@ export function ContributionForm({
 
     const parsed = submissionBatchSchema.safeParse(payload);
     if (!parsed.success) {
-      const mapped = mapZodIssuesToFieldErrors(parsed.error);
+      const mapped = mapZodIssuesToFieldErrors(parsed.error, state.words);
       setFieldErrors(mapped);
       setErrorCode("VALIDATION_FAILED");
       setStatus("error");
@@ -499,6 +499,13 @@ export function ContributionForm({
   const firstGuidedClientId = state.words.find(
     (w) => w.referencePromptId,
   )?.clientId;
+  // Errors are keyed by stable clientId (see field-errors.ts), so the first
+  // card *in current order* carrying an error is found by walking the words
+  // in order — never a hardcoded position, which would misattribute after a
+  // reorder or a removed card.
+  const firstErrorClientId = state.words.find(
+    (w) => fieldErrors[w.clientId],
+  )?.clientId;
 
   return (
     <form
@@ -579,16 +586,15 @@ export function ContributionForm({
 
       <div className="flex flex-col gap-4">
         {state.words.map((card, index) => {
-          const cardErrors = fieldErrors[String(index)];
+          const cardErrors = fieldErrors[card.clientId];
           const isFirstGuided = card.clientId === firstGuidedClientId;
+          const isFirstError = card.clientId === firstErrorClientId;
           return (
             <div
               key={card.clientId}
               ref={(el) => {
-                if (index === 0) {
-                  baseCardRef.current = el;
-                  if (cardErrors) firstErrorRef.current = el;
-                }
+                if (index === 0) baseCardRef.current = el;
+                if (isFirstError) firstErrorRef.current = el;
                 if (isFirstGuided) firstGuidedCardRef.current = el;
               }}
             >
