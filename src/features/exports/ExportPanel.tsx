@@ -24,15 +24,26 @@ const SCHEMA_LABELS: Record<"1" | "2" | "3", string> = {
   "3": "الإصدار ٣ — قاموس اللهجات السعودية (موصى به)",
 };
 
+type VisibilityFilter = "all" | "public" | "private";
+
+const VISIBILITY_LABELS: Record<VisibilityFilter, string> = {
+  all: "الكل",
+  public: "عام فقط",
+  private: "خاص فقط",
+};
+
 export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
   const [dialectId, setDialectId] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
   const [schemaVersion, setSchemaVersion] = useState<"1" | "2" | "3">("3");
+  const [visibility, setVisibility] = useState<VisibilityFilter>("all");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
-  const hasFilters = Boolean(dialectId || updatedFrom || updatedTo);
+  const hasFilters = Boolean(
+    dialectId || updatedFrom || updatedTo || visibility !== "all",
+  );
 
   function buildQuery(extra: Record<string, string>) {
     const params = new URLSearchParams();
@@ -41,6 +52,7 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
       params.set("updatedFrom", new Date(updatedFrom).toISOString());
     if (updatedTo) params.set("updatedTo", new Date(updatedTo).toISOString());
     params.set("schemaVersion", schemaVersion);
+    params.set("visibility", visibility);
     for (const [k, v] of Object.entries(extra)) params.set(k, v);
     return params.toString();
   }
@@ -49,6 +61,7 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
     setDialectId("");
     setUpdatedFrom("");
     setUpdatedTo("");
+    setVisibility("all");
     setPreview(null);
   }
 
@@ -108,6 +121,23 @@ export function ExportPanel({ dialects }: { dialects: DialectOption[] }) {
           {dialects.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name_ar}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field id="export-visibility" label="ظهور الكلمات">
+        <select
+          id="export-visibility"
+          value={visibility}
+          onChange={(e) => {
+            setVisibility(e.target.value as VisibilityFilter);
+            setPreview(null);
+          }}
+          className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+        >
+          {(Object.keys(VISIBILITY_LABELS) as VisibilityFilter[]).map((v) => (
+            <option key={v} value={v}>
+              {VISIBILITY_LABELS[v]}
             </option>
           ))}
         </select>

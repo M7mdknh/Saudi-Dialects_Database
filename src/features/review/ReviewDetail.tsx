@@ -5,17 +5,22 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   approveSubmission,
+  setCanonicalVisibility,
   setParticipationExclusion,
   setReviewStatus,
   setSubmissionMainGroup,
   undoReviewEvent,
 } from "./actions";
-import { STATUS_LABELS_AR } from "./status-labels";
+import {
+  approvedVisibilityBadgeLabel,
+  STATUS_LABELS_AR,
+} from "./status-labels";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import type {
   MainDialectGroupCode,
   ParticipationExclusionReason,
+  PublicVisibility,
   ReviewStatus,
 } from "@/lib/supabase/types";
 
@@ -109,6 +114,8 @@ interface CanonicalLinkStatus {
   entryId: string;
   editorialStatus: string;
   exampleCount: number;
+  publicVisibility: PublicVisibility;
+  version: number;
 }
 
 interface ReviewDetailProps {
@@ -157,7 +164,7 @@ export function ReviewDetail({
     });
   }
 
-  function approveWithCanonicalEdit() {
+  function approveWithCanonicalEdit(visibility: PublicVisibility) {
     if (!dialectId) {
       setStatus("error");
       return;
@@ -174,7 +181,30 @@ export function ReviewDetail({
             msaSynonyms: msaSynonym.trim() ? [msaSynonym.trim()] : [],
             explanation,
           },
+          visibility,
         });
+        if (result.stale) {
+          setStatus("stale");
+          return;
+        }
+        setStatus("saved");
+        router.refresh();
+      } catch {
+        setStatus("error");
+      }
+    });
+  }
+
+  function toggleVisibility(next: PublicVisibility) {
+    if (!canonicalStatus) return;
+    startTransition(async () => {
+      setStatus("saving");
+      try {
+        const result = await setCanonicalVisibility(
+          canonicalStatus.entryId,
+          next,
+          canonicalStatus.version,
+        );
         if (result.stale) {
           setStatus("stale");
           return;
@@ -323,9 +353,18 @@ export function ReviewDetail({
           <Button
             type="button"
             disabled={pending}
-            onClick={approveWithCanonicalEdit}
+            onClick={() => approveWithCanonicalEdit("public")}
           >
-            اعتماد
+            اعتماد ونشر
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => approveWithCanonicalEdit("private")}
+            title="يبقى معتمدًا وقابلاً للتصدير، لكن لا يظهر في أي صفحة عامة"
+          >
+            اعتماد بدون نشر
           </Button>
           <Button
             type="button"
@@ -352,6 +391,33 @@ export function ReviewDetail({
             إعادة لقيد المراجعة
           </Button>
         </div>
+
+        {canonicalStatus?.editorialStatus === "approved" ? (
+          <div className="border-border mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+            <span className="text-foreground/70 text-sm">
+              {approvedVisibilityBadgeLabel(canonicalStatus.publicVisibility)}
+            </span>
+            {canonicalStatus.publicVisibility === "private" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => toggleVisibility("public")}
+              >
+                إظهار للعامة
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => toggleVisibility("private")}
+              >
+                إخفاء عن العامة
+              </Button>
+            )}
+          </div>
+        ) : null}
       </section>
 
       {duplicates.length > 0 ? (
@@ -438,9 +504,18 @@ function ExportEligibilityBanner({
 
   if (reviewStatus === "approved") {
     if (canonicalStatus?.editorialStatus === "approved") {
+      const isPrivate = canonicalStatus.publicVisibility === "private";
       return (
-        <p className="border-success/30 bg-success/5 text-success rounded-lg border px-3 py-2 text-sm font-medium">
-          معتمدة وجاهزة للتصدير
+        <p
+          className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+            isPrivate
+              ? "border-border bg-surface-muted text-foreground/80"
+              : "border-success/30 bg-success/5 text-success"
+          }`}
+        >
+          {isPrivate
+            ? "معتمدة وجاهزة للتصدير، لكنها غير ظاهرة للعامة"
+            : "معتمدة وجاهزة للتصدير ومنشورة للعامة"}
           {canonicalStatus.exampleCount === 0
             ? " (تنبيه: بلا أمثلة معتمدة بعد)"
             : ""}

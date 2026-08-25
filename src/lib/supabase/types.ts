@@ -20,6 +20,8 @@ export type MainDialectGroupCode =
 export type ParticipationExclusionReason =
   "spam" | "abuse" | "test" | "duplicate" | "invalid_submission";
 
+export type PublicVisibility = "public" | "private";
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -94,6 +96,7 @@ export interface Database {
         canonical_msa_synonyms: string[];
         canonical_explanation: string | null;
         editorial_status: EditorialStatus;
+        public_visibility: PublicVisibility;
         version: number;
         approved_by: string | null;
         approved_at: string | null;
@@ -234,11 +237,27 @@ export interface Database {
           p_canonical_word_search_key?: string | null;
           p_canonical_msa_synonyms?: string[] | null;
           p_canonical_explanation?: string | null;
+          p_visibility?: PublicVisibility;
         };
         Returns: {
           entry_id: string | null;
           review_status: string;
           updated_at: string;
+          stale: boolean;
+          public_visibility: PublicVisibility | null;
+        }[];
+      };
+      set_canonical_visibility: {
+        Args: {
+          p_actor: string;
+          p_entry_id: string;
+          p_visibility: PublicVisibility;
+          p_expected_version: number | null;
+        };
+        Returns: {
+          id: string;
+          public_visibility: PublicVisibility;
+          version: number;
           stale: boolean;
         }[];
       };

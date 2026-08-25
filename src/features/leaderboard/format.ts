@@ -29,6 +29,16 @@ export function formatParticipationCount(n: number): string {
   return formatArabicCount(n, "مساهمة", "مساهمتان", "مساهمات");
 }
 
+/**
+ * Same agreement rules as formatParticipationCount, but with the genitive
+ * dual form ("مساهمتين") required as a مضاف إليه after a preposition-like
+ * head noun such as "بفارق" — as opposed to the nominative dual
+ * ("مساهمتان") used when the count itself is the grammatical subject.
+ */
+export function formatParticipationCountGenitive(n: number): string {
+  return formatArabicCount(n, "مساهمة", "مساهمتين", "مساهمات");
+}
+
 export function formatApprovedCount(n: number): string {
   return formatArabicCount(n, "كلمة معتمدة", "كلمتان معتمدتان", "كلمات معتمدة");
 }

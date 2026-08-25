@@ -6,7 +6,7 @@ import {
 } from "@/features/review/actions";
 import { DashboardCounts } from "@/features/review/DashboardCounts";
 import { ReviewGrid } from "@/features/review/ReviewGrid";
-import type { ReviewStatus } from "@/lib/supabase/types";
+import type { PublicVisibility, ReviewStatus } from "@/lib/supabase/types";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -17,11 +17,12 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = Number(params.page ?? "1") || 1;
   const status = params.status as ReviewStatus | undefined;
+  const visibility = params.visibility as PublicVisibility | undefined;
   const search = params.q;
 
   const [counts, { rows, total, pageSize }, dialects] = await Promise.all([
     getDashboardCounts(),
-    listSubmissions({ page, status, search }),
+    listSubmissions({ page, status, visibility, search }),
     listDialects(),
   ]);
 
@@ -34,6 +35,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         page={page}
         pageSize={pageSize}
         status={status}
+        visibility={visibility}
         search={search}
         dialects={dialects}
       />

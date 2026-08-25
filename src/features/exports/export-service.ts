@@ -6,10 +6,22 @@ import {
   type CanonicalEntryForExport,
 } from "./projection";
 
+/**
+ * Admin export visibility filter — distinct from the public-facing
+ * approved+public rule. "all" (the default) intentionally includes both
+ * public and private approved records: an approved-private word is still
+ * reviewed, useful data that belongs in an authorized admin export and
+ * future model-training data, even though it must never reach any public
+ * surface (see public_dialect_words()/public_dialect_leaderboard(), which
+ * hard-filter to public_visibility = 'public').
+ */
+export type ExportVisibilityFilter = "all" | "public" | "private";
+
 export interface ExportFilters {
   dialectId?: string;
   updatedFrom?: string;
   updatedTo?: string;
+  visibility?: ExportVisibilityFilter;
 }
 
 export async function fetchApprovedEntries(
@@ -27,6 +39,8 @@ export async function fetchApprovedEntries(
     query = query.eq("canonical_dialect_id", filters.dialectId);
   if (filters.updatedFrom) query = query.gte("updated_at", filters.updatedFrom);
   if (filters.updatedTo) query = query.lte("updated_at", filters.updatedTo);
+  if (filters.visibility && filters.visibility !== "all")
+    query = query.eq("public_visibility", filters.visibility);
 
   const { data, error } = await query;
   if (error) throw error;

@@ -26,6 +26,7 @@ import {
 } from "@/features/exports/serializer";
 
 const VALID_SCHEMA_VERSIONS = new Set(["1", "2", "3"]);
+const VALID_VISIBILITY_FILTERS = new Set(["all", "public", "private"]);
 
 export async function GET(request: Request) {
   await requireAdmin();
@@ -36,6 +37,10 @@ export async function GET(request: Request) {
   const dialectId = url.searchParams.get("dialectId") ?? undefined;
   const updatedFrom = url.searchParams.get("updatedFrom") ?? undefined;
   const updatedTo = url.searchParams.get("updatedTo") ?? undefined;
+  const visibilityParam = url.searchParams.get("visibility") ?? "all";
+  if (!VALID_VISIBILITY_FILTERS.has(visibilityParam)) {
+    return NextResponse.json({ code: "INVALID_VISIBILITY" }, { status: 400 });
+  }
 
   const schemaVersionParam = url.searchParams.get("schemaVersion") ?? "1";
   if (!VALID_SCHEMA_VERSIONS.has(schemaVersionParam)) {
@@ -45,7 +50,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const filters = { dialectId, updatedFrom, updatedTo };
+  const filters = {
+    dialectId,
+    updatedFrom,
+    updatedTo,
+    visibility: visibilityParam as "all" | "public" | "private",
+  };
 
   if (preview) {
     try {

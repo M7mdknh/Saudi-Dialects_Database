@@ -1,13 +1,25 @@
 import type { LeaderboardEntry } from "./actions";
-import { formatParticipationCount } from "./format";
+import {
+  formatParticipationCount,
+  formatParticipationCountGenitive,
+} from "./format";
 
-/** "تتصدر اللهجة الحجازية" style — used only in competitive-context copy. */
+/** Bare feminine adjective — used when another noun (e.g. "اللهجتان") already anchors the phrase. */
 export const MAIN_GROUP_FEMININE_LABELS: Record<string, string> = {
   hijazi: "الحجازية",
   najdi: "النجدية",
   eastern: "الشرقاوية",
   northern: "الشمالية",
   southern: "الجنوبية",
+};
+
+/** Full grammatical display name ("اللهجة الحجازية") — explicit, not derived by concatenating the short label. */
+export const MAIN_GROUP_DISPLAY_NAMES: Record<string, string> = {
+  hijazi: "اللهجة الحجازية",
+  najdi: "اللهجة النجدية",
+  eastern: "اللهجة الشرقاوية",
+  northern: "اللهجة الشمالية",
+  southern: "اللهجة الجنوبية",
 };
 
 export interface LeaderboardStats {
@@ -45,13 +57,6 @@ export function isTiedForFirst(entries: LeaderboardEntry[]): boolean {
   );
 }
 
-function joinArabicList(labels: string[]): string {
-  if (labels.length === 0) return "";
-  if (labels.length === 1) return labels[0];
-  if (labels.length === 2) return `${labels[0]} و${labels[1]}`;
-  return `${labels.slice(0, -1).join("، ")}، و${labels[labels.length - 1]}`;
-}
-
 /**
  * Headline competitive-context sentence, computed purely from authoritative
  * counts — never a hardcoded dialect name. Empty string only when the input
@@ -59,16 +64,25 @@ function joinArabicList(labels: string[]): string {
  */
 export function computeHeadlineMessage(entries: LeaderboardEntry[]): string {
   if (entries.length === 0) return "";
-  if (!hasCompetitionStarted(entries)) return "المنافسة تبدأ بأول مساهمة";
+  if (!hasCompetitionStarted(entries)) return "المنافسة تبدأ بأول مساهمة.";
   if (isTiedForFirst(entries)) {
     const tied = entries.filter((e) => e.rank === 1);
-    return `تعادل ${joinArabicList(tied.map((e) => e.mainGroupLabelAr))} على الصدارة`;
+    if (tied.length === 2) {
+      const [a, b] = tied.map(
+        (e) =>
+          MAIN_GROUP_FEMININE_LABELS[e.mainGroupCode] ?? e.mainGroupLabelAr,
+      );
+      return `تتعادل اللهجتان ${a} و${b} في الصدارة.`;
+    }
+    return "تتعادل عدة لهجات في الصدارة.";
   }
   const leader = entries.find((e) => e.rank === 1);
   const { leaderGap } = computeStats(entries);
   if (!leader || leaderGap === null || leaderGap === 0)
-    return "تعادل على الصدارة";
-  return `يتصدر ${leader.mainGroupLabelAr} بفارق ${formatParticipationCount(leaderGap)}`;
+    return "تتعادل عدة لهجات في الصدارة.";
+  const label =
+    MAIN_GROUP_DISPLAY_NAMES[leader.mainGroupCode] ?? leader.mainGroupLabelAr;
+  return `تتصدر ${label} بفارق ${formatParticipationCountGenitive(leaderGap)}.`;
 }
 
 /**

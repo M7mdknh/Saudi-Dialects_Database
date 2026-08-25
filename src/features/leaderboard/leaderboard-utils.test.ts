@@ -169,16 +169,110 @@ describe("computeStats", () => {
 
 describe("computeHeadlineMessage", () => {
   it("shows the shared starting state when every group is zero", () => {
-    expect(computeHeadlineMessage(ALL_ZERO)).toBe("المنافسة تبدأ بأول مساهمة");
+    expect(computeHeadlineMessage(ALL_ZERO)).toBe("المنافسة تبدأ بأول مساهمة.");
   });
-  it("names the true leader and the authoritative gap, never hardcoded", () => {
+  it("names the true leader with the full grammatical dialect name and the authoritative gap, never hardcoded", () => {
     expect(computeHeadlineMessage(DISTINCT_RANKS)).toBe(
-      "يتصدر حجازي بفارق ٢٠ مساهمة",
+      "تتصدر اللهجة الحجازية بفارق ٢٠ مساهمة.",
     );
   });
-  it("labels a shared lead instead of picking a false champion", () => {
+  it("uses the genitive dual form after بفارق for a two-contribution gap", () => {
+    const twoGap: LeaderboardEntry[] = [
+      entry({
+        mainGroupCode: "najdi",
+        mainGroupLabelAr: "نجدي",
+        submissionCount: 5,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "hijazi",
+        mainGroupLabelAr: "حجازي",
+        submissionCount: 3,
+        rank: 2,
+      }),
+    ];
+    expect(computeHeadlineMessage(twoGap)).toBe(
+      "تتصدر اللهجة النجدية بفارق مساهمتين.",
+    );
+  });
+  it("uses مساهمة واحدة for a one-contribution gap", () => {
+    const oneGap: LeaderboardEntry[] = [
+      entry({
+        mainGroupCode: "eastern",
+        mainGroupLabelAr: "شرقاوي",
+        submissionCount: 4,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "hijazi",
+        mainGroupLabelAr: "حجازي",
+        submissionCount: 3,
+        rank: 2,
+      }),
+    ];
+    expect(computeHeadlineMessage(oneGap)).toBe(
+      "تتصدر اللهجة الشرقاوية بفارق مساهمة واحدة.",
+    );
+  });
+  it("uses digit+plural for a three-to-ten gap", () => {
+    const midGap: LeaderboardEntry[] = [
+      entry({
+        mainGroupCode: "northern",
+        mainGroupLabelAr: "شمالي",
+        submissionCount: 8,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "hijazi",
+        mainGroupLabelAr: "حجازي",
+        submissionCount: 3,
+        rank: 2,
+      }),
+    ];
+    expect(computeHeadlineMessage(midGap)).toBe(
+      "تتصدر اللهجة الشمالية بفارق ٥ مساهمات.",
+    );
+  });
+  it("labels a two-way tie with the dual-noun construction", () => {
     expect(computeHeadlineMessage(TIED_FOR_FIRST)).toBe(
-      "تعادل حجازي ونجدي على الصدارة",
+      "تتعادل اللهجتان الحجازية والنجدية في الصدارة.",
+    );
+  });
+  it("labels a three-or-more-way tie generically", () => {
+    const threeWayTie: LeaderboardEntry[] = [
+      entry({
+        mainGroupCode: "hijazi",
+        mainGroupLabelAr: "حجازي",
+        submissionCount: 10,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "najdi",
+        mainGroupLabelAr: "نجدي",
+        submissionCount: 10,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "eastern",
+        mainGroupLabelAr: "شرقاوي",
+        submissionCount: 10,
+        rank: 1,
+      }),
+      entry({
+        mainGroupCode: "northern",
+        mainGroupLabelAr: "شمالي",
+        submissionCount: 2,
+        rank: 4,
+      }),
+      entry({
+        mainGroupCode: "southern",
+        mainGroupLabelAr: "جنوبي",
+        submissionCount: 0,
+        rank: 5,
+      }),
+    ];
+    expect(computeHeadlineMessage(threeWayTie)).toBe(
+      "تتعادل عدة لهجات في الصدارة.",
     );
   });
 });
