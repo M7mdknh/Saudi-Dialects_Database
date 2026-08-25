@@ -3,11 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import {
-  setReviewStatus,
-  undoReviewEvent,
-  upsertCanonicalEntry,
-} from "./actions";
+import { approveSubmission, setReviewStatus, undoReviewEvent } from "./actions";
 import { STATUS_LABELS_AR } from "./status-labels";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -79,11 +75,18 @@ interface DialectOption {
   name_ar: string;
 }
 
+interface CanonicalLinkStatus {
+  entryId: string;
+  editorialStatus: string;
+  exampleCount: number;
+}
+
 interface ReviewDetailProps {
   submission: SubmissionDetail;
   history: ReviewEventRow[];
   duplicates: DuplicateCandidate[];
   dialects: DialectOption[];
+  canonicalStatus: CanonicalLinkStatus | null;
 }
 
 export function ReviewDetail({
@@ -91,6 +94,7 @@ export function ReviewDetail({
   history,
   duplicates,
   dialects,
+  canonicalStatus,
 }: ReviewDetailProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -106,7 +110,7 @@ export function ReviewDetail({
     submission.submitted_explanation ?? "",
   );
 
-  function act(newStatus: ReviewStatus) {
+  function act(newStatus: Exclude<ReviewStatus, "approved">) {
     startTransition(async () => {
       setStatus("saving");
       const result = await setReviewStatus(
@@ -124,20 +128,27 @@ export function ReviewDetail({
   }
 
   function approveWithCanonicalEdit() {
+    if (!dialectId) {
+      setStatus("error");
+      return;
+    }
     startTransition(async () => {
       setStatus("saving");
       try {
-        await upsertCanonicalEntry({
-          entryId: null,
-          expectedVersion: null,
-          word: canonicalWord,
+        const result = await approveSubmission({
+          submissionId: submission.id,
           dialectId,
-          msaSynonyms: msaSynonym.trim() ? [msaSynonym.trim()] : [],
-          explanation,
-          editorialStatus: "approved",
-          referencePromptId: submission.reference_prompt_id,
+          expectedUpdatedAt: submission.updated_at,
+          canonicalEdit: {
+            word: canonicalWord,
+            msaSynonyms: msaSynonym.trim() ? [msaSynonym.trim()] : [],
+            explanation,
+          },
         });
-        await setReviewStatus(submission.id, "approved", submission.updated_at);
+        if (result.stale) {
+          setStatus("stale");
+          return;
+        }
         setStatus("saved");
         router.refresh();
       } catch {
@@ -154,6 +165,11 @@ export function ReviewDetail({
           {STATUS_LABELS_AR[submission.review_status]}
         </span>
       </div>
+
+      <ExportEligibilityBanner
+        reviewStatus={submission.review_status}
+        canonicalStatus={canonicalStatus}
+      />
 
       {(() => {
         const snapshot = readSnapshot(submission.reference_prompt_snapshot);
@@ -367,4 +383,55 @@ export function ReviewDetail({
       </section>
     </div>
   );
+}
+
+/**
+ * Makes the distinction the review workflow can otherwise hide: a raw
+ * submission's own `review_status` says nothing about whether an actual
+ * exportable canonical record exists. Never show a bare "معتمد" without
+ * this context — that ambiguity is exactly what produced the empty-export
+ * bug (see migration 0017).
+ */
+function ExportEligibilityBanner({
+  reviewStatus,
+  canonicalStatus,
+}: {
+  reviewStatus: ReviewStatus;
+  canonicalStatus: CanonicalLinkStatus | null;
+}) {
+  if (reviewStatus === "rejected" || reviewStatus === "duplicate") return null;
+
+  if (reviewStatus === "approved") {
+    if (canonicalStatus?.editorialStatus === "approved") {
+      return (
+        <p className="border-success/30 bg-success/5 text-success rounded-lg border px-3 py-2 text-sm font-medium">
+          معتمدة وجاهزة للتصدير
+          {canonicalStatus.exampleCount === 0
+            ? " (تنبيه: بلا أمثلة معتمدة بعد)"
+            : ""}
+          .
+        </p>
+      );
+    }
+    // Legacy state from before migration 0017: review_status flipped to
+    // "approved" without ever promoting a canonical entry. Clicking
+    // "اعتماد" again now runs the complete transaction and fixes it.
+    return (
+      <p className="border-danger/30 bg-danger/5 text-danger rounded-lg border px-3 py-2 text-sm font-medium">
+        معتمدة كإدخال، لكن لا يوجد سجل كنسي مكتمل — لن تظهر في التصدير. اضغط
+        «اعتماد» أدناه لإكمالها.
+      </p>
+    );
+  }
+
+  if (canonicalStatus?.editorialStatus === "draft") {
+    return (
+      <p className="border-border bg-surface-muted text-foreground/70 rounded-lg border px-3 py-2 text-sm">
+        مصنّفة بلهجة معتمدة (مسودة) لكن لم تُعتمد بعد — لن تظهر في التصدير حتى
+        الاعتماد.
+      </p>
+    );
+  }
+
+  return null;
 }

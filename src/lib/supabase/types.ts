@@ -192,6 +192,25 @@ export interface Database {
           stale: boolean;
         }[];
       };
+      approve_raw_submission: {
+        Args: {
+          p_actor: string;
+          p_submission_id: string;
+          p_dialect_id: string;
+          p_expected_updated_at: string | null;
+          p_use_raw_defaults?: boolean;
+          p_canonical_word?: string | null;
+          p_canonical_word_search_key?: string | null;
+          p_canonical_msa_synonyms?: string[] | null;
+          p_canonical_explanation?: string | null;
+        };
+        Returns: {
+          entry_id: string | null;
+          review_status: string;
+          updated_at: string;
+          stale: boolean;
+        }[];
+      };
       upsert_canonical_entry: {
         Args: {
           p_actor: string;

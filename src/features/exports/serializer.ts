@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import {
   EXPORT_SCHEMA_VERSION,
   EXPORT_SCHEMA_VERSION_V2,
+  EXPORT_SCHEMA_VERSION_V3,
   type ExportRecordV1,
   type ExportRecordV2,
+  type ExportRecordV3,
 } from "./projection";
 
 /** Stable key order: explicit field list, not object spread/iteration order. */
@@ -85,4 +87,83 @@ export function serializeJsonV2(
 
 export function serializeJsonlV2(records: ExportRecordV2[]): string {
   return records.map((r) => JSON.stringify(orderedRecordV2(r))).join("\n");
+}
+
+// --- Schema v3 (recommended per-word dictionary/training format) --------
+
+/** Fixed key order exactly as documented — the external training contract for v3. */
+function orderedRecordV3(record: ExportRecordV3) {
+  return {
+    id: record.id,
+    entry_type: record.entry_type,
+    word: {
+      text: record.word.text,
+      variants: record.word.variants,
+    },
+    dialect: {
+      country_code: record.dialect.country_code,
+      main_group_code: record.dialect.main_group_code,
+      main_group_ar: record.dialect.main_group_ar,
+      local_labels: record.dialect.local_labels,
+      regions: record.dialect.regions,
+    },
+    meaning: {
+      msa_synonyms: record.meaning.msa_synonyms,
+      definition_ar: record.meaning.definition_ar,
+      usage_note_ar: record.meaning.usage_note_ar,
+    },
+    examples: record.examples.map((e) => ({
+      id: e.id,
+      dialect_text: e.dialect_text,
+      msa_paraphrase: e.msa_paraphrase,
+      context_ar: e.context_ar,
+    })),
+    relations: {
+      reference_concept_id: record.relations.reference_concept_id,
+      synonyms_by_dialect: record.relations.synonyms_by_dialect.map((g) => ({
+        main_group_code: g.main_group_code,
+        main_group_ar: g.main_group_ar,
+        local_labels: g.local_labels,
+        words: g.words,
+      })),
+    },
+    tags: {
+      part_of_speech: record.tags.part_of_speech,
+      semantic_categories: record.tags.semantic_categories,
+      register: record.tags.register,
+      usage_tags: record.tags.usage_tags,
+    },
+    provenance: {
+      source_type: record.provenance.source_type,
+      source_count: record.provenance.source_count,
+      review_status: record.provenance.review_status,
+      reviewed_at: record.provenance.reviewed_at,
+    },
+  };
+}
+
+/** Checksum covers only the deterministic per-word records array, never `exported_at`. */
+export function computeChecksumV3(records: ExportRecordV3[]): string {
+  const canonical = JSON.stringify(records.map(orderedRecordV3));
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+export function serializeJsonV3(
+  records: ExportRecordV3[],
+  exportedAt: string,
+): string {
+  const envelope = {
+    schema_version: EXPORT_SCHEMA_VERSION_V3,
+    dataset: "saudi_dialects_dictionary",
+    exported_at: exportedAt,
+    record_count: records.length,
+    checksum: computeChecksumV3(records),
+    records: records.map(orderedRecordV3),
+  };
+  return JSON.stringify(envelope, null, 2);
+}
+
+/** One complete per-word record per line — never the envelope. Same projection, same order as JSON. */
+export function serializeJsonlV3(records: ExportRecordV3[]): string {
+  return records.map((r) => JSON.stringify(orderedRecordV3(r))).join("\n");
 }

@@ -4,7 +4,11 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { STATUS_LABELS_AR, REVIEW_STATUS_FILTERS } from "./status-labels";
-import { bulkSetReviewStatus, classifySubmissions } from "./actions";
+import {
+  bulkApproveSubmissions,
+  bulkSetReviewStatus,
+  classifySubmissions,
+} from "./actions";
 import { Button } from "@/components/ui/Button";
 import type { ReviewStatus } from "@/lib/supabase/types";
 
@@ -138,19 +142,50 @@ export function ReviewGrid({
           <span className="text-sm font-medium">
             تم تحديد {selectedIds.length} سجل
           </span>
+          <select
+            value={bulkDialect}
+            onChange={(e) => setBulkDialect(e.target.value)}
+            className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
+            aria-label="اللهجة المعتمدة (مطلوبة للاعتماد أو التصنيف)"
+          >
+            <option value="">اختر اللهجة المعتمدة</option>
+            {dialects.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name_ar}
+              </option>
+            ))}
+          </select>
           <Button
             type="button"
             variant="secondary"
-            disabled={pending}
+            disabled={pending || !bulkDialect}
+            title={
+              bulkDialect
+                ? undefined
+                : "اختر اللهجة المعتمدة أولاً — الاعتماد يتطلب تصنيفًا"
+            }
             onClick={() => {
               if (!confirm(`اعتماد ${selectedIds.length} سجل؟`)) return;
               runBulk(
-                () => bulkSetReviewStatus(selectedIds, "approved"),
-                "تم الاعتماد.",
+                () => bulkApproveSubmissions(selectedIds, bulkDialect),
+                "تم الاعتماد. الكلمات الآن جاهزة للتصدير.",
               );
             }}
           >
             اعتماد
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending || !bulkDialect}
+            onClick={() =>
+              runBulk(
+                () => classifySubmissions(selectedIds, bulkDialect),
+                "تم التصنيف (مسودة، غير معتمد بعد).",
+              )
+            }
+          >
+            تطبيق التصنيف فقط
           </Button>
           <Button
             type="button"
@@ -178,32 +213,6 @@ export function ReviewGrid({
             }
           >
             تمييز كمكرر
-          </Button>
-          <select
-            value={bulkDialect}
-            onChange={(e) => setBulkDialect(e.target.value)}
-            className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
-            aria-label="تصنيف اللهجة الكنسية"
-          >
-            <option value="">اختر اللهجة المعتمدة</option>
-            {dialects.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name_ar}
-              </option>
-            ))}
-          </select>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={pending || !bulkDialect}
-            onClick={() =>
-              runBulk(
-                () => classifySubmissions(selectedIds, bulkDialect),
-                "تم التصنيف.",
-              )
-            }
-          >
-            تطبيق التصنيف
           </Button>
           {selectedIds.length >= 2 ? (
             <Link

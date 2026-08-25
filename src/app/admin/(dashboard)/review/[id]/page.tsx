@@ -9,10 +9,8 @@ export default async function ReviewDetailPage({
 }) {
   await requireAdmin();
   const { id } = await params;
-  const [{ submission, history, duplicates }, dialects] = await Promise.all([
-    getSubmissionDetail(id),
-    listDialects(),
-  ]);
+  const [{ submission, history, duplicates, canonicalStatus }, dialects] =
+    await Promise.all([getSubmissionDetail(id), listDialects()]);
 
   return (
     <ReviewDetail
@@ -20,6 +18,7 @@ export default async function ReviewDetailPage({
       history={history}
       duplicates={duplicates}
       dialects={dialects}
+      canonicalStatus={canonicalStatus}
     />
   );
 }
