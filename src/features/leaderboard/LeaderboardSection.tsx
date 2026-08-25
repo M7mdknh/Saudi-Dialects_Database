@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LeaderboardList } from "./LeaderboardList";
 import { getDialectLeaderboard, type LeaderboardEntry } from "./actions";
+import { LEADERBOARD_REFRESH_EVENT } from "./refresh-event";
 import { Button } from "@/components/ui/Button";
 
 interface LeaderboardSectionProps {
@@ -24,7 +25,7 @@ export function LeaderboardSection({
   const [entries, setEntries] = useState(initialEntries);
   const [loading, setLoading] = useState(false);
 
-  async function retry() {
+  async function refresh() {
     setLoading(true);
     try {
       const next = await getDialectLeaderboard();
@@ -36,20 +37,27 @@ export function LeaderboardSection({
     }
   }
 
+  useEffect(() => {
+    const handler = () => void refresh();
+    window.addEventListener(LEADERBOARD_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(LEADERBOARD_REFRESH_EVENT, handler);
+  }, []);
+
   return (
     <section
       aria-labelledby="leaderboard-preview-heading"
-      className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4 px-4 sm:px-6"
+      className="max-w-shell mx-auto flex w-full min-w-0 flex-col gap-4 px-4 sm:px-6"
     >
       <div className="flex flex-col gap-1 text-center">
         <h2
           id="leaderboard-preview-heading"
           className="text-foreground text-lg font-bold"
         >
-          أي لهجة جمعت كلمات أكثر؟
+          أي لهجة جمعت مساهمات أكثر؟
         </h2>
         <p className="text-foreground/70 text-sm">
-          ترتيب اللهجات السعودية الخمس حسب عدد الكلمات المعتمدة فقط.
+          كل كلمة ترسلها تضيف نقطة للهجتك، ولا تظهر الكلمات للعامة إلا بعد
+          المراجعة.
         </p>
       </div>
 
@@ -62,7 +70,7 @@ export function LeaderboardSection({
           <Button
             type="button"
             variant="secondary"
-            onClick={retry}
+            onClick={refresh}
             disabled={loading}
           >
             {loading ? "جارٍ إعادة المحاولة…" : "إعادة المحاولة"}

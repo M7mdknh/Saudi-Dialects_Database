@@ -139,7 +139,7 @@ export function DialectExplorer({
 
       {pending ? (
         <div
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
           aria-hidden="true"
         >
           {Array.from({ length: 4 }, (_, i) => (
@@ -156,7 +156,10 @@ export function DialectExplorer({
             : "لا توجد كلمات معتمدة في هذه اللهجة بعد."}
         </p>
       ) : (
-        <ul role="list" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul
+          role="list"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {result.rows.map((row) => (
             <WordCardView key={row.id} row={row} />
           ))}

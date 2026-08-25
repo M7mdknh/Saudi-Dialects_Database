@@ -1,7 +1,16 @@
 "use client";
 
 import type { GuidedPromptRecord } from "./types";
+import { PromptCard } from "./PromptCard";
 import { Button } from "@/components/ui/Button";
+
+const ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+function toArabicDigits(n: number): string {
+  return String(n)
+    .split("")
+    .map((d) => ARABIC_DIGITS[Number(d)] ?? d)
+    .join("");
+}
 
 interface GuidedPromptRailProps {
   prompts: GuidedPromptRecord[];
@@ -10,6 +19,11 @@ interface GuidedPromptRailProps {
   /** True when the last fetch (initial load or refresh) failed — distinct from a genuine empty result. */
   error?: boolean;
   onRetry?: () => void;
+  answeredIds?: Set<string>;
+  offset?: number;
+  total?: number;
+  onNext?: () => void;
+  onPrev?: () => void;
 }
 
 export function GuidedPromptRail({
@@ -18,7 +32,16 @@ export function GuidedPromptRail({
   loading,
   error,
   onRetry,
+  answeredIds,
+  offset = 0,
+  total = 0,
+  onNext,
+  onPrev,
 }: GuidedPromptRailProps) {
+  const rangeStart = total > 0 ? offset + 1 : 0;
+  const rangeEnd = Math.min(offset + prompts.length, total);
+  const showPager = Boolean(onNext) && total > prompts.length;
+
   return (
     <section
       aria-labelledby="guided-prompts-heading"
@@ -34,6 +57,12 @@ export function GuidedPromptRail({
         <p className="text-foreground/70 text-sm">
           اختر معنى، واكتب لنا الكلمة التي تستخدمونها في منطقتكم.
         </p>
+        {!loading && !error && total > 0 ? (
+          <p className="text-foreground/50 text-xs" aria-live="polite">
+            {toArabicDigits(rangeStart)}–{toArabicDigits(rangeEnd)} من{" "}
+            {toArabicDigits(total)}
+          </p>
+        ) : null}
       </div>
 
       {loading ? (
@@ -44,7 +73,7 @@ export function GuidedPromptRail({
           {Array.from({ length: 6 }, (_, i) => (
             <div
               key={i}
-              className="border-border bg-surface-muted h-32 animate-pulse rounded-2xl border"
+              className="border-border bg-surface-muted h-[136px] animate-pulse rounded-2xl border"
             />
           ))}
         </div>
@@ -73,38 +102,37 @@ export function GuidedPromptRail({
           aria-label="معانٍ مقترحة للمساهمة"
         >
           {prompts.map((prompt) => (
-            <li
+            <PromptCard
               key={prompt.id}
-              className="w-[78%] shrink-0 snap-start sm:w-auto"
-            >
-              <div className="border-border bg-surface flex h-full flex-col justify-between gap-3 rounded-2xl border p-4 shadow-sm">
-                <div className="flex flex-col gap-1.5">
-                  <span className="bg-surface-muted text-foreground/60 inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium">
-                    {prompt.categoryLabelAr}
-                  </span>
-                  <p className="text-foreground text-lg font-bold">
-                    {prompt.msaLemma}
-                  </p>
-                  <p className="text-foreground/70 text-sm">
-                    {prompt.definitionAr}
-                  </p>
-                  <p className="text-foreground/50 text-xs">
-                    {prompt.scenarioAr}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => onChoose(prompt)}
-                >
-                  أعرف كلمة لهذا المعنى
-                </Button>
-              </div>
-            </li>
+              prompt={prompt}
+              variant="rail"
+              answered={answeredIds?.has(prompt.id) ?? false}
+              onChoose={onChoose}
+            />
           ))}
         </ul>
       )}
+
+      {showPager ? (
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={loading || offset <= 0}
+            onClick={onPrev}
+          >
+            الكلمات السابقة
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={loading}
+            onClick={onNext}
+          >
+            الكلمات التالية
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }

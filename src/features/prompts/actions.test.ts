@@ -6,9 +6,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(async () => ({ rpc: rpcMock })),
 }));
 
-const { getGuidedPrompts } = await import("./actions");
+const { listReferencePromptsPage, listPromptCategoryCounts } =
+  await import("./actions");
 
-function row(id: string, category: string) {
+function row(id: string, category: string, totalCount: number) {
   return {
     id,
     category,
@@ -20,64 +21,79 @@ function row(id: string, category: string) {
     answer_form: "word_or_phrase",
     priority: 90,
     prompt_version: 1,
+    display_order: 1,
+    total_count: totalCount,
   };
 }
 
-describe("getGuidedPrompts", () => {
-  it("returns only prompts from the active-prompts RPC (never more than what the DB marked active)", async () => {
-    const activeRows = ["a", "b", "c", "d", "e", "f", "g", "h"].map((id) =>
-      row(id, id),
-    );
-    rpcMock.mockResolvedValueOnce({ data: activeRows, error: null });
+describe("listReferencePromptsPage", () => {
+  it("requests the ordered, paginated RPC with the given offset/limit/category/search", async () => {
+    rpcMock.mockResolvedValueOnce({ data: [row("a", "cat1", 1)], error: null });
 
-    const result = await getGuidedPrompts([]);
-
-    expect(rpcMock).toHaveBeenCalledWith("list_active_reference_prompts");
-    expect(result).toHaveLength(6);
-    const activeIds = new Set(activeRows.map((r) => r.id));
-    expect(result.every((p) => activeIds.has(p.id))).toBe(true);
-  });
-
-  it("never sends the whole active pool to the caller, only the display count", async () => {
-    const activeRows = Array.from({ length: 60 }, (_, i) =>
-      row(`p${i}`, `cat${i % 10}`),
-    );
-    rpcMock.mockResolvedValueOnce({ data: activeRows, error: null });
-
-    const result = await getGuidedPrompts([]);
-    expect(result.length).toBeLessThan(activeRows.length);
-    expect(result).toHaveLength(6);
-  });
-
-  it("propagates RPC errors instead of silently returning an empty set", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: new Error("boom") });
-    await expect(getGuidedPrompts([])).rejects.toThrow();
-  });
-
-  it("propagates a missing-table error (undeployed migration) instead of an empty set", async () => {
-    rpcMock.mockResolvedValueOnce({
-      data: null,
-      error: {
-        message: 'relation "reference_prompts" does not exist',
-        code: "42P01",
-      },
+    await listReferencePromptsPage({
+      offset: 12,
+      limit: 6,
+      category: "cat1",
+      search: "شيء",
     });
-    await expect(getGuidedPrompts([])).rejects.toBeTruthy();
-  });
 
-  it("propagates an RLS-denial error instead of an empty set", async () => {
-    rpcMock.mockResolvedValueOnce({
-      data: null,
-      error: {
-        message: "permission denied for function list_active_reference_prompts",
-        code: "42501",
-      },
+    expect(rpcMock).toHaveBeenCalledWith("list_reference_prompts_page", {
+      p_offset: 12,
+      p_limit: 6,
+      p_category: "cat1",
+      p_search: "شيء",
     });
-    await expect(getGuidedPrompts([])).rejects.toBeTruthy();
   });
 
-  it("returns a genuine empty array (not a throw) when the RPC succeeds with no active rows", async () => {
+  it("returns the page rows and the true total from the RPC, never the whole pool", async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => row(`p${i}`, "cat", 300));
+    rpcMock.mockResolvedValueOnce({ data: rows, error: null });
+
+    const page = await listReferencePromptsPage({ offset: 0, limit: 6 });
+    expect(page.rows).toHaveLength(6);
+    expect(page.total).toBe(300);
+  });
+
+  it("returns a genuine empty page (not a throw) when the RPC succeeds with no rows", async () => {
     rpcMock.mockResolvedValueOnce({ data: [], error: null });
-    await expect(getGuidedPrompts([])).resolves.toEqual([]);
+    const page = await listReferencePromptsPage({ offset: 0, limit: 6 });
+    expect(page).toEqual({ rows: [], total: 0 });
+  });
+
+  it("propagates RPC errors instead of silently returning an empty page", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: new Error("boom") });
+    await expect(listReferencePromptsPage({})).rejects.toThrow();
+  });
+
+  it("propagates a missing-table/RLS-denial-style error instead of an empty page", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "permission denied", code: "42501" },
+    });
+    await expect(listReferencePromptsPage({})).rejects.toBeTruthy();
+  });
+});
+
+describe("listPromptCategoryCounts", () => {
+  it("maps category counts from the RPC", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: [
+        {
+          category: "emotions",
+          category_label_ar: "المشاعر",
+          prompt_count: 12,
+        },
+      ],
+      error: null,
+    });
+    const result = await listPromptCategoryCounts();
+    expect(result).toEqual([
+      { category: "emotions", categoryLabelAr: "المشاعر", count: 12 },
+    ]);
+  });
+
+  it("propagates errors instead of returning an empty list", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: new Error("boom") });
+    await expect(listPromptCategoryCounts()).rejects.toThrow();
   });
 });

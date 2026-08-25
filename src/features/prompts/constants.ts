@@ -1,0 +1,1 @@
+export const GUIDED_PROMPT_BATCH_SIZE = 6;

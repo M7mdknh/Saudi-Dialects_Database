@@ -3,7 +3,12 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { toSearchKey } from "@/lib/text/normalize-arabic";
-import type { Database, ReviewStatus } from "@/lib/supabase/types";
+import type {
+  Database,
+  MainDialectGroupCode,
+  ParticipationExclusionReason,
+  ReviewStatus,
+} from "@/lib/supabase/types";
 
 const PAGE_SIZE = 25;
 
@@ -44,6 +49,8 @@ export async function getDashboardCounts() {
       format: string;
       record_count: number;
     } | null;
+    unclassified_participation: number;
+    excluded_participation: number;
   };
 }
 
@@ -401,4 +408,72 @@ export async function undoReviewEvent(eventId: string) {
     p_event_id: eventId,
   });
   if (error) throw error;
+}
+
+/**
+ * The only lever that removes a legitimate-looking submission from
+ * submission_count (spam/abuse/test/duplicate/invalid_submission). An
+ * ordinary public rejection must never go through this path — participation
+ * and public-dictionary eligibility are independent decisions. Pass null to
+ * restore participation (undo).
+ */
+export async function setParticipationExclusion(
+  submissionId: string,
+  reason: ParticipationExclusionReason | null,
+) {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .rpc("set_submission_participation_exclusion", {
+      p_actor: admin.userId,
+      p_submission_id: submissionId,
+      p_reason: reason,
+    })
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function bulkSetParticipationExclusion(
+  submissionIds: string[],
+  reason: ParticipationExclusionReason | null,
+) {
+  const results = await Promise.all(
+    submissionIds.map((id) => setParticipationExclusion(id, reason)),
+  );
+  return results;
+}
+
+/**
+ * Admin override of which main group a raw submission's participation
+ * counts toward. Independent of canonical dialect classification — this
+ * only affects the leaderboard's live attribution (see
+ * public_dialect_leaderboard, migration 0019), and takes effect
+ * immediately since counts are always derived, never cached.
+ */
+export async function setSubmissionMainGroup(
+  submissionId: string,
+  mainGroupCode: MainDialectGroupCode | null,
+) {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .rpc("set_submission_main_group", {
+      p_actor: admin.userId,
+      p_submission_id: submissionId,
+      p_main_group_code: mainGroupCode,
+    })
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function bulkSetSubmissionMainGroup(
+  submissionIds: string[],
+  mainGroupCode: MainDialectGroupCode,
+) {
+  const results = await Promise.all(
+    submissionIds.map((id) => setSubmissionMainGroup(id, mainGroupCode)),
+  );
+  return results;
 }

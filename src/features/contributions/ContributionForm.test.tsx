@@ -2,12 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedPromptRecord } from "@/features/prompts/types";
+import type { GuidedPromptPage } from "@/features/prompts/actions";
 import type { PublicDialectOption } from "./dialects-actions";
 
-const getGuidedPromptsMock = vi.fn();
-vi.mock("@/features/prompts/actions", () => ({
-  getGuidedPrompts: (...args: unknown[]) => getGuidedPromptsMock(...args),
-}));
+const listReferencePromptsPageMock = vi.fn();
+vi.mock("@/features/prompts/actions", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/features/prompts/actions")
+  >("@/features/prompts/actions");
+  return {
+    ...actual,
+    listReferencePromptsPage: (...args: unknown[]) =>
+      listReferencePromptsPageMock(...args),
+  };
+});
 
 const listPublicDialectsMock = vi.fn();
 vi.mock("./dialects-actions", () => ({
@@ -29,26 +37,33 @@ const ricePrompt: GuidedPromptRecord = {
   promptVersion: 1,
 };
 
+function page(
+  rows: GuidedPromptRecord[],
+  total = rows.length,
+): GuidedPromptPage {
+  return { rows, total };
+}
+
 const dialectOptions: PublicDialectOption[] = [
   {
-    id: "d-hijazi",
+    id: "11111111-1111-4111-8111-111111111111",
     nameAr: "حجازي",
     slug: "hijazi-main",
     parentId: null,
     mainGroupCode: "hijazi",
   },
   {
-    id: "d-najdi",
+    id: "22222222-2222-4222-8222-222222222222",
     nameAr: "نجدي",
     slug: "najdi-main",
     parentId: null,
     mainGroupCode: "najdi",
   },
   {
-    id: "d-jeddawi",
+    id: "33333333-3333-4333-8333-333333333333",
     nameAr: "جداوي",
     slug: "jeddawi",
-    parentId: "d-hijazi",
+    parentId: "11111111-1111-4111-8111-111111111111",
     mainGroupCode: "hijazi",
   },
 ];
@@ -56,8 +71,8 @@ const dialectOptions: PublicDialectOption[] = [
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
-  getGuidedPromptsMock.mockReset();
-  getGuidedPromptsMock.mockResolvedValue([]);
+  listReferencePromptsPageMock.mockReset();
+  listReferencePromptsPageMock.mockResolvedValue(page([]));
   listPublicDialectsMock.mockReset();
   listPublicDialectsMock.mockResolvedValue([]);
 });
@@ -68,7 +83,12 @@ afterEach(() => {
 
 describe("ContributionForm", () => {
   it("renders one word card by default with the required fields", () => {
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
     expect(
       screen.getByRole("heading", { name: "ساهم بكلمة من لهجتك" }),
     ).toBeInTheDocument();
@@ -77,14 +97,24 @@ describe("ContributionForm", () => {
 
   it("adds another word card when the add-word button is clicked", async () => {
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "+ إضافة كلمة أخرى" }));
     expect(screen.getByText("الكلمة ٢")).toBeInTheDocument();
   });
 
   it("adds and removes an additional example within a card", async () => {
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "+ إضافة مثال" }));
     const removeButtons = screen.getAllByRole("button", { name: /حذف المثال/ });
     expect(removeButtons).toHaveLength(2);
@@ -98,7 +128,12 @@ describe("ContributionForm", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
 
     await user.type(screen.getByLabelText(/الكلمة باللهجة/), "سبهللة");
     await user.type(screen.getByLabelText(/اللهجة أو المنطقة/), "حجازي");
@@ -116,7 +151,12 @@ describe("ContributionForm", () => {
     });
     vi.stubGlobal("fetch", fetchSpy);
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
 
     await user.type(screen.getByLabelText(/الكلمة باللهجة/), "سبهللة");
     await user.type(screen.getByLabelText(/اللهجة أو المنطقة/), "حجازي");
@@ -129,7 +169,7 @@ describe("ContributionForm", () => {
     expect(body.words[0].msaSynonym).toBe("");
   });
 
-  it("submits successfully (ordinary submission), clears the draft, refreshes prompts, and shows the success state", async () => {
+  it("submits successfully (ordinary submission), clears the draft, and shows the success state — without advancing the prompt batch", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -137,9 +177,13 @@ describe("ContributionForm", () => {
         json: async () => ({ batchId: "11111111-1111-1111-1111-111111111111" }),
       }),
     );
-    getGuidedPromptsMock.mockResolvedValue([ricePrompt]);
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([ricePrompt])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
 
     await user.type(screen.getByLabelText(/الكلمة باللهجة/), "سبهللة");
     await user.type(screen.getByLabelText(/اللهجة أو المنطقة/), "حجازي");
@@ -153,30 +197,35 @@ describe("ContributionForm", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "وصلتنا مساهمتك، وشكراً لك!" }),
+        screen.getByRole("heading", { name: "وصلتنا مساهمتك، شكرًا لك!" }),
       ).toBeInTheDocument();
     });
     expect(
       window.localStorage.getItem("lahajat.contribution.draft.v1"),
     ).toBeNull();
 
-    await waitFor(() => {
-      expect(getGuidedPromptsMock).toHaveBeenCalled();
-    });
-    await waitFor(() => {
-      expect(screen.getByText("أرز")).toBeInTheDocument();
-    });
+    // Ordinary (non-guided) submission must not fetch another batch.
+    expect(listReferencePromptsPageMock).not.toHaveBeenCalled();
+    expect(screen.getByText("أرز")).toBeInTheDocument();
   });
 
   it("restores an unfinished draft after remount", async () => {
     const { unmount } = render(
-      <ContributionForm initialPrompts={[]} initialDialectOptions={[]} />,
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
     );
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/الكلمة باللهجة/), "مسودة");
     unmount();
 
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByDisplayValue("مسودة")).toBeInTheDocument();
     });
@@ -185,7 +234,10 @@ describe("ContributionForm", () => {
 
   it("shows a distinct retry state when the initial guided-prompt load failed (server error, not genuine empty)", () => {
     render(
-      <ContributionForm initialPrompts={null} initialDialectOptions={[]} />,
+      <ContributionForm
+        initialPrompts={null}
+        initialDialectOptions={dialectOptions}
+      />,
     );
     expect(
       screen.getByText(
@@ -200,13 +252,36 @@ describe("ContributionForm", () => {
   });
 
   it("retrying after a failed guided-prompt load refetches and clears the error state", async () => {
-    getGuidedPromptsMock.mockResolvedValue([ricePrompt]);
+    listReferencePromptsPageMock.mockResolvedValue(page([ricePrompt], 300));
     const user = userEvent.setup();
     render(
-      <ContributionForm initialPrompts={null} initialDialectOptions={[]} />,
+      <ContributionForm
+        initialPrompts={null}
+        initialDialectOptions={dialectOptions}
+      />,
     );
     await user.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
     await waitFor(() => expect(screen.getByText("أرز")).toBeInTheDocument());
+  });
+
+  it("shows the batch range indicator and lets a visitor request the next batch", async () => {
+    listReferencePromptsPageMock.mockResolvedValueOnce(
+      page([{ ...ricePrompt, id: "next-prompt", msaLemma: "قمح" }], 300),
+    );
+    const user = userEvent.setup();
+    render(
+      <ContributionForm
+        initialPrompts={page([ricePrompt], 300)}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
+    expect(screen.getByText("١–١ من ٣٠٠")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "الكلمات التالية" }));
+    await waitFor(() => expect(screen.getByText("قمح")).toBeInTheDocument());
+    expect(listReferencePromptsPageMock).toHaveBeenCalledWith({
+      offset: 6,
+      limit: 6,
+    });
   });
 });
 
@@ -215,7 +290,7 @@ describe("ContributionForm dialect combobox", () => {
     const user = userEvent.setup();
     render(
       <ContributionForm
-        initialPrompts={[]}
+        initialPrompts={page([])}
         initialDialectOptions={dialectOptions}
       />,
     );
@@ -229,7 +304,7 @@ describe("ContributionForm dialect combobox", () => {
     const user = userEvent.setup();
     render(
       <ContributionForm
-        initialPrompts={[]}
+        initialPrompts={page([])}
         initialDialectOptions={dialectOptions}
       />,
     );
@@ -243,7 +318,7 @@ describe("ContributionForm dialect combobox", () => {
     const user = userEvent.setup();
     render(
       <ContributionForm
-        initialPrompts={[]}
+        initialPrompts={page([])}
         initialDialectOptions={dialectOptions}
       />,
     );
@@ -261,28 +336,23 @@ describe("ContributionForm guided contribution", () => {
   it("displays the initial guided prompts near the top of the page", () => {
     render(
       <ContributionForm
-        initialPrompts={[ricePrompt]}
-        initialDialectOptions={[]}
+        initialPrompts={page([ricePrompt])}
+        initialDialectOptions={dialectOptions}
       />,
     );
     expect(screen.getByText("أرز")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "أعرف كلمة لهذا المعنى" }),
-    ).toBeInTheDocument();
   });
 
   it("choosing a prompt adds a card that prefills the synonym and meaning as read-only", async () => {
     const user = userEvent.setup();
     render(
       <ContributionForm
-        initialPrompts={[ricePrompt]}
-        initialDialectOptions={[]}
+        initialPrompts={page([ricePrompt])}
+        initialDialectOptions={dialectOptions}
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "أعرف كلمة لهذا المعنى" }),
-    );
+    await user.click(screen.getByRole("button", { name: /أرز/ }));
 
     // Only the pre-existing ordinary card has an editable synonym input; the
     // new guided card renders its synonym/meaning as read-only text instead.
@@ -298,23 +368,22 @@ describe("ContributionForm guided contribution", () => {
     expect(guidedWordInput.value).toBe("");
   });
 
-  it("the prompt id and a snapshot reach the submitted payload, retaining the prefilled reference synonym", async () => {
+  it("the prompt id and a snapshot reach the submitted payload, retaining the prefilled reference synonym, and a guided submission advances to the next batch", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ batchId: "11111111-1111-1111-1111-111111111111" }),
     });
     vi.stubGlobal("fetch", fetchSpy);
+    listReferencePromptsPageMock.mockResolvedValueOnce(page([], 300));
     const user = userEvent.setup();
     render(
       <ContributionForm
-        initialPrompts={[ricePrompt]}
-        initialDialectOptions={[]}
+        initialPrompts={page([ricePrompt], 300)}
+        initialDialectOptions={dialectOptions}
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "أعرف كلمة لهذا المعنى" }),
-    );
+    await user.click(screen.getByRole("button", { name: /أرز/ }));
     // Remove the original empty ordinary card so only the guided card needs
     // filling in this scenario.
     await user.click(screen.getByRole("button", { name: "حذف الكلمة ١" }));
@@ -334,6 +403,14 @@ describe("ContributionForm guided contribution", () => {
     expect(body.words[0].referencePromptSnapshot.msaLemma).toBe("أرز");
     expect(body.words[0].referencePromptSnapshot.promptVersion).toBe(1);
     expect(body.words[0].msaSynonym).toBe("أرز");
+
+    // Guided submission advances the ordered batch position.
+    await waitFor(() =>
+      expect(listReferencePromptsPageMock).toHaveBeenCalledWith({
+        offset: 6,
+        limit: 6,
+      }),
+    );
   });
 
   it("ordinary submissions still send no reference prompt fields", async () => {
@@ -343,7 +420,12 @@ describe("ContributionForm guided contribution", () => {
     });
     vi.stubGlobal("fetch", fetchSpy);
     const user = userEvent.setup();
-    render(<ContributionForm initialPrompts={[]} initialDialectOptions={[]} />);
+    render(
+      <ContributionForm
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
+      />,
+    );
 
     await user.type(screen.getByLabelText(/الكلمة باللهجة/), "سبهللة");
     await user.type(screen.getByLabelText(/اللهجة أو المنطقة/), "حجازي");
@@ -370,8 +452,8 @@ describe("ContributionForm Turnstile gating", () => {
   it("disables submit while Turnstile has not yet produced a token", () => {
     render(
       <ContributionForm
-        initialPrompts={[]}
-        initialDialectOptions={[]}
+        initialPrompts={page([])}
+        initialDialectOptions={dialectOptions}
         turnstileSiteKey="test-site-key"
       />,
     );

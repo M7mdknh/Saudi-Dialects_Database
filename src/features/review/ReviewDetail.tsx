@@ -3,11 +3,37 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { approveSubmission, setReviewStatus, undoReviewEvent } from "./actions";
+import {
+  approveSubmission,
+  setParticipationExclusion,
+  setReviewStatus,
+  setSubmissionMainGroup,
+  undoReviewEvent,
+} from "./actions";
 import { STATUS_LABELS_AR } from "./status-labels";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
-import type { ReviewStatus } from "@/lib/supabase/types";
+import type {
+  MainDialectGroupCode,
+  ParticipationExclusionReason,
+  ReviewStatus,
+} from "@/lib/supabase/types";
+
+const MAIN_GROUP_LABELS: Record<MainDialectGroupCode, string> = {
+  hijazi: "حجازي",
+  najdi: "نجدي",
+  eastern: "شرقاوي",
+  northern: "شمالي",
+  southern: "جنوبي",
+};
+
+const EXCLUSION_REASON_LABELS: Record<ParticipationExclusionReason, string> = {
+  spam: "سبام",
+  abuse: "إساءة استخدام",
+  test: "بيانات اختبار",
+  duplicate: "تكرار غير مقصود",
+  invalid_submission: "مساهمة غير صالحة",
+};
 
 interface ExampleRow {
   id: string;
@@ -26,6 +52,10 @@ interface SubmissionDetail {
   raw_examples: ExampleRow[];
   reference_prompt_id: string | null;
   reference_prompt_snapshot: unknown;
+  participation_exclusion_reason: ParticipationExclusionReason | null;
+  selected_dialect_id: string | null;
+  provisional_main_group_code: MainDialectGroupCode | null;
+  admin_confirmed_main_group_code: MainDialectGroupCode | null;
 }
 
 interface ReferencePromptSnapshotView {
@@ -169,6 +199,11 @@ export function ReviewDetail({
       <ExportEligibilityBanner
         reviewStatus={submission.review_status}
         canonicalStatus={canonicalStatus}
+      />
+
+      <ParticipationSection
+        submission={submission}
+        onChanged={router.refresh}
       />
 
       {(() => {
@@ -434,4 +469,140 @@ function ExportEligibilityBanner({
   }
 
   return null;
+}
+
+/**
+ * Participation (leaderboard) state is independent of review_status —
+ * this submission already counted toward submission_count the instant it
+ * was received (see migration 0019), and stays counted through pending,
+ * approved, or an ordinary rejection. Only an explicit exclusion reason
+ * (spam/abuse/test/duplicate/invalid_submission) removes it.
+ */
+function ParticipationSection({
+  submission,
+  onChanged,
+}: {
+  submission: SubmissionDetail;
+  onChanged: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [reason, setReason] = useState<ParticipationExclusionReason | "">("");
+  const [mainGroup, setMainGroup] = useState<MainDialectGroupCode | "">(
+    submission.admin_confirmed_main_group_code ?? "",
+  );
+
+  const isExcluded = Boolean(submission.participation_exclusion_reason);
+
+  function applyExclusion() {
+    if (!reason) return;
+    startTransition(async () => {
+      await setParticipationExclusion(submission.id, reason);
+      onChanged();
+    });
+  }
+
+  function clearExclusion() {
+    startTransition(async () => {
+      await setParticipationExclusion(submission.id, null);
+      onChanged();
+    });
+  }
+
+  function applyMainGroup() {
+    if (!mainGroup) return;
+    startTransition(async () => {
+      await setSubmissionMainGroup(submission.id, mainGroup);
+      onChanged();
+    });
+  }
+
+  return (
+    <section className="border-border bg-surface rounded-2xl border p-4">
+      <h2 className="text-foreground/70 mb-3 text-sm font-bold">
+        المشاركة في لوحة الصدارة
+      </h2>
+      <p className="mb-3 text-sm">
+        تُحتسب كمساهمة:{" "}
+        <span
+          className={`font-semibold ${isExcluded ? "text-danger" : "text-success"}`}
+        >
+          {isExcluded
+            ? `لا (${EXCLUSION_REASON_LABELS[submission.participation_exclusion_reason!]})`
+            : "نعم"}
+        </span>
+      </p>
+      <p className="text-foreground/60 mb-3 text-xs">
+        المجموعة المُعتمدة إداريًا:{" "}
+        {submission.admin_confirmed_main_group_code
+          ? MAIN_GROUP_LABELS[submission.admin_confirmed_main_group_code]
+          : "—"}{" "}
+        · المجموعة التي اختارها المساهم:{" "}
+        {submission.provisional_main_group_code
+          ? MAIN_GROUP_LABELS[submission.provisional_main_group_code]
+          : "—"}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={mainGroup}
+          onChange={(e) =>
+            setMainGroup(e.target.value as MainDialectGroupCode | "")
+          }
+          className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
+          aria-label="نقل احتساب المشاركة إلى مجموعة رئيسية أخرى"
+        >
+          <option value="">اختر مجموعة المشاركة</option>
+          {Object.entries(MAIN_GROUP_LABELS).map(([code, label]) => (
+            <option key={code} value={code}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={pending || !mainGroup}
+          onClick={applyMainGroup}
+        >
+          نقل الاحتساب
+        </Button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          value={reason}
+          onChange={(e) =>
+            setReason(e.target.value as ParticipationExclusionReason | "")
+          }
+          className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
+          aria-label="سبب الاستبعاد من احتساب المشاركة"
+        >
+          <option value="">سبب الاستبعاد</option>
+          {Object.entries(EXCLUSION_REASON_LABELS).map(([code, label]) => (
+            <option key={code} value={code}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          variant="danger"
+          disabled={pending || !reason}
+          onClick={applyExclusion}
+        >
+          استبعاد من الاحتساب
+        </Button>
+        {isExcluded ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={pending}
+            onClick={clearExclusion}
+          >
+            إلغاء الاستبعاد
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
 }

@@ -6,14 +6,18 @@
   --foreground-muted: #55645b;
   --surface: #ffffff;
   --surface-muted: #efe9d9;
+  --surface-elevated: #ffffff;
   --accent: #0e6b4f;
   --accent-hover: #0a4f3a;
+  --accent-bright: #0a8f68;
   --accent-foreground: #ffffff;
   --gold: #b6902f;
   --gold-foreground: #2f2508;
   --border: #e2dbc9;
   --danger: #a8281f;
   --success: #14794f;
+  --warning: #9a6a0c;
+  --warning-foreground: #2f2007;
   --focus-ring: #0e6b4f;
 }
 
@@ -23,17 +27,29 @@
   --color-foreground-muted: var(--foreground-muted);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-elevated: var(--surface-elevated);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-bright: var(--accent-bright);
   --color-accent-foreground: var(--accent-foreground);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
   --color-border: var(--border);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --font-arabic:
     var(--font-ibm-plex-sans-arabic), "Segoe UI", "Tahoma", "Geeza Pro",
     "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif;
+
+  /* Deliberate width scale, used consistently instead of scattered
+     arbitrary widths (see CLAUDE.md engineering workflow + the redesign
+     brief). max-w-shell / max-w-reading / max-w-form become real Tailwind
+     utilities from this namespace. */
+  --container-shell: 76rem; /* ~1216px: header/footer/leaderboard/page shell */
+  --container-reading: 42.5rem; /* ~680px: prose/explanatory text */
+  --container-form: 51.25rem; /* ~820px: the contribution form */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,14 +59,18 @@
     --foreground-muted: #9fb0a4;
     --surface: #1a2118;
     --surface-muted: #232b20;
+    --surface-elevated: #212a1e;
     --accent: #35a67e;
     --accent-hover: #4bbd93;
+    --accent-bright: #4fd6a3;
     --accent-foreground: #0a1a12;
     --gold: #d8b45c;
     --gold-foreground: #2b2107;
     --border: #33402f;
     --danger: #ff8a80;
     --success: #5fce9f;
+    --warning: #e8b95c;
+    --warning-foreground: #2b2007;
     --focus-ring: #35a67e;
   }
 }

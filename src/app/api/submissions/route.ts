@@ -89,7 +89,12 @@ export async function POST(request: Request) {
       abuseHashExpiry().toISOString(),
     );
     return NextResponse.json(
-      { batchId: result.batchId },
+      {
+        ok: true,
+        batchId: result.batchId,
+        acceptedEntryCount: result.acceptedEntryCount,
+        leaderboardUpdates: result.leaderboardUpdates,
+      },
       { status: result.created ? 201 : 200 },
     );
   } catch (error) {

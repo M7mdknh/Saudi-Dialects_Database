@@ -6,11 +6,33 @@ import Link from "next/link";
 import { STATUS_LABELS_AR, REVIEW_STATUS_FILTERS } from "./status-labels";
 import {
   bulkApproveSubmissions,
+  bulkSetParticipationExclusion,
   bulkSetReviewStatus,
+  bulkSetSubmissionMainGroup,
   classifySubmissions,
 } from "./actions";
 import { Button } from "@/components/ui/Button";
-import type { ReviewStatus } from "@/lib/supabase/types";
+import type {
+  MainDialectGroupCode,
+  ParticipationExclusionReason,
+  ReviewStatus,
+} from "@/lib/supabase/types";
+
+const MAIN_GROUP_LABELS: Record<MainDialectGroupCode, string> = {
+  hijazi: "حجازي",
+  najdi: "نجدي",
+  eastern: "شرقاوي",
+  northern: "شمالي",
+  southern: "جنوبي",
+};
+
+const EXCLUSION_REASON_LABELS: Record<ParticipationExclusionReason, string> = {
+  spam: "سبام",
+  abuse: "إساءة استخدام",
+  test: "بيانات اختبار",
+  duplicate: "تكرار غير مقصود",
+  invalid_submission: "مساهمة غير صالحة",
+};
 
 interface ExampleRow {
   id: string;
@@ -26,6 +48,10 @@ interface SubmissionRow {
   created_at: string;
   updated_at: string;
   raw_examples: ExampleRow[];
+  participation_exclusion_reason: ParticipationExclusionReason | null;
+  selected_dialect_id: string | null;
+  provisional_main_group_code: MainDialectGroupCode | null;
+  admin_confirmed_main_group_code: MainDialectGroupCode | null;
 }
 
 interface DialectOption {
@@ -58,6 +84,12 @@ export function ReviewGrid({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [bulkDialect, setBulkDialect] = useState("");
+  const [exclusionReason, setExclusionReason] = useState<
+    ParticipationExclusionReason | ""
+  >("");
+  const [bulkMainGroup, setBulkMainGroup] = useState<MainDialectGroupCode | "">(
+    "",
+  );
   const [message, setMessage] = useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -214,6 +246,89 @@ export function ReviewGrid({
           >
             تمييز كمكرر
           </Button>
+
+          <select
+            value={bulkMainGroup}
+            onChange={(e) =>
+              setBulkMainGroup(e.target.value as MainDialectGroupCode | "")
+            }
+            className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
+            aria-label="المجموعة الرئيسية للمشاركة (لوحة الصدارة)"
+          >
+            <option value="">مجموعة المشاركة الرئيسية</option>
+            {Object.entries(MAIN_GROUP_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending || !bulkMainGroup}
+            title="ينقل احتساب المشاركة في لوحة الصدارة فورًا — منفصل عن تصنيف الكلمة المعتمدة"
+            onClick={() =>
+              runBulk(
+                () =>
+                  bulkSetSubmissionMainGroup(
+                    selectedIds,
+                    bulkMainGroup as MainDialectGroupCode,
+                  ),
+                "تم نقل احتساب المشاركة.",
+              )
+            }
+          >
+            تصنيف مجموعة المشاركة
+          </Button>
+
+          <select
+            value={exclusionReason}
+            onChange={(e) =>
+              setExclusionReason(
+                e.target.value as ParticipationExclusionReason | "",
+              )
+            }
+            className="border-border bg-surface min-h-9 rounded-lg border px-2 text-sm"
+            aria-label="سبب الاستبعاد من احتساب المشاركة"
+          >
+            <option value="">سبب الاستبعاد</option>
+            {Object.entries(EXCLUSION_REASON_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={pending || !exclusionReason}
+            onClick={() =>
+              runBulk(
+                () =>
+                  bulkSetParticipationExclusion(
+                    selectedIds,
+                    exclusionReason as ParticipationExclusionReason,
+                  ),
+                "تم الاستبعاد من احتساب المشاركة.",
+              )
+            }
+          >
+            استبعاد من الاحتساب
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={pending}
+            onClick={() =>
+              runBulk(
+                () => bulkSetParticipationExclusion(selectedIds, null),
+                "أُعيد احتساب المشاركة.",
+              )
+            }
+          >
+            إلغاء الاستبعاد
+          </Button>
+
           {selectedIds.length >= 2 ? (
             <Link
               href={`/admin/merge?ids=${selectedIds.join(",")}`}
@@ -253,6 +368,7 @@ export function ReviewGrid({
               />
               <th className="resize-x overflow-hidden p-2">المرادف الفصيح</th>
               <th className="resize-x overflow-hidden p-2">الحالة</th>
+              <th className="resize-x overflow-hidden p-2">الاحتساب</th>
               <SortableHeader label="تاريخ الإرسال" sortKey="created_at" />
               <th className="resize-x overflow-hidden p-2">إجراءات</th>
             </tr>
@@ -260,7 +376,7 @@ export function ReviewGrid({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-foreground/60 p-6 text-center">
+                <td colSpan={8} className="text-foreground/60 p-6 text-center">
                   لا توجد مساهمات مطابقة.
                 </td>
               </tr>
@@ -288,6 +404,11 @@ export function ReviewGrid({
                   <td className="p-2">{row.submitted_msa_synonym || "—"}</td>
                   <td className="p-2">
                     <StatusBadge status={row.review_status} />
+                  </td>
+                  <td className="p-2">
+                    <ParticipationBadge
+                      reason={row.participation_exclusion_reason}
+                    />
                   </td>
                   <td className="text-foreground/70 p-2">
                     {new Date(row.created_at).toLocaleDateString("ar")}
@@ -366,6 +487,29 @@ function StatusBadge({ status }: { status: ReviewStatus }) {
       className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${toneClass[status]}`}
     >
       {STATUS_LABELS_AR[status]}
+    </span>
+  );
+}
+
+/** Never a bare "approved/rejected" badge implying export/leaderboard status — this shows whether the row actually counts toward submission_count right now, and why not when it doesn't. */
+function ParticipationBadge({
+  reason,
+}: {
+  reason: ParticipationExclusionReason | null;
+}) {
+  if (!reason) {
+    return (
+      <span className="bg-success/20 text-success inline-block rounded-full px-2 py-0.5 text-xs font-semibold">
+        يُحتسب
+      </span>
+    );
+  }
+  return (
+    <span
+      className="bg-danger/20 text-danger inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
+      title={`مستبعدة: ${EXCLUSION_REASON_LABELS[reason]}`}
+    >
+      لا يُحتسب ({EXCLUSION_REASON_LABELS[reason]})
     </span>
   );
 }

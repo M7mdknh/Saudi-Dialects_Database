@@ -1,11 +1,18 @@
 import { test, expect } from "@playwright/test";
 
-// These journeys exercise the real guided-prompt backend (list_active_reference_prompts,
-// submit_batch) rather than mocking fetch, so they only produce meaningful
-// results when NEXT_PUBLIC_SUPABASE_URL points at a live (or locally
-// proxied) Supabase-compatible backend with the reference_prompts seed
-// applied. If prompts aren't available, the guided rail degrades to its
-// empty state and these tests are skipped instead of failing spuriously.
+// These journeys exercise the real guided-prompt backend
+// (list_reference_prompts_page, submit_batch) rather than mocking fetch, so
+// they only produce meaningful results when NEXT_PUBLIC_SUPABASE_URL points
+// at a live (or locally proxied) Supabase-compatible backend with the
+// reference_prompts seed applied. If prompts aren't available, the guided
+// rail degrades to its empty state and these tests are skipped instead of
+// failing spuriously.
+
+function guidedCards(page: import("@playwright/test").Page) {
+  return page
+    .getByRole("list", { name: "معانٍ مقترحة للمساهمة" })
+    .getByRole("button");
+}
 
 test.describe("guided contribution journey", () => {
   test.beforeEach(async ({ page }) => {
@@ -15,18 +22,14 @@ test.describe("guided contribution journey", () => {
   test("choosing a suggested meaning prefills the reference fields as read-only and lets the visitor add the dialect word", async ({
     page,
   }) => {
-    const chooseButton = page
-      .getByRole("button", { name: "أعرف كلمة لهذا المعنى" })
-      .first();
+    const chooseButton = guidedCards(page).first();
     const hasPrompts = await chooseButton.isVisible().catch(() => false);
     test.skip(
       !hasPrompts,
       "No guided prompts available from the backend in this environment.",
     );
 
-    const promptWord = await page
-      .locator("li")
-      .filter({ has: chooseButton })
+    const promptWord = await chooseButton
       .locator("p.text-lg")
       .first()
       .textContent();
@@ -51,12 +54,10 @@ test.describe("guided contribution journey", () => {
     await exampleInputs.last().fill("هذه جملة اختبار للكلمة الموجّهة");
   });
 
-  test("a guided submission succeeds and the success screen offers refreshed prompts", async ({
+  test("a guided submission succeeds and the success screen is shown", async ({
     page,
   }) => {
-    const chooseButton = page
-      .getByRole("button", { name: "أعرف كلمة لهذا المعنى" })
-      .first();
+    const chooseButton = guidedCards(page).first();
     const hasPrompts = await chooseButton.isVisible().catch(() => false);
     test.skip(
       !hasPrompts,
@@ -87,12 +88,12 @@ test.describe("guided contribution journey", () => {
     await page.getByRole("button", { name: "إرسال المساهمة" }).click();
 
     await expect(
-      page.getByRole("heading", { name: "وصلتنا مساهمتك، وشكراً لك!" }),
+      page.getByRole("heading", { name: "وصلتنا مساهمتك، شكرًا لك!" }),
     ).toBeVisible({
       timeout: 15000,
     });
     await expect(
-      page.getByRole("button", { name: "إرسال مساهمة أخرى" }),
+      page.getByRole("button", { name: "ساهم بكلمة أخرى" }),
     ).toBeVisible();
   });
 
@@ -119,18 +120,16 @@ test.describe("guided contribution journey", () => {
     await page.getByRole("button", { name: "إرسال المساهمة" }).click();
 
     await expect(
-      page.getByRole("heading", { name: "وصلتنا مساهمتك، وشكراً لك!" }),
+      page.getByRole("heading", { name: "وصلتنا مساهمتك، شكرًا لك!" }),
     ).toBeVisible({
       timeout: 15000,
     });
   });
 
-  test("keyboard: the guided choose button and the submit button are both reachable and operable by keyboard", async ({
+  test("keyboard: the guided card and the submit button are both reachable and operable by keyboard", async ({
     page,
   }) => {
-    const chooseButton = page
-      .getByRole("button", { name: "أعرف كلمة لهذا المعنى" })
-      .first();
+    const chooseButton = guidedCards(page).first();
     const hasPrompts = await chooseButton.isVisible().catch(() => false);
     test.skip(
       !hasPrompts,

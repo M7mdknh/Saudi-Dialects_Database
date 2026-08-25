@@ -1,11 +1,16 @@
 "use client";
 
 import type { WordCardInput } from "./schema";
-import { FIELD_LIMITS, MAX_EXAMPLES_PER_WORD } from "./constants";
+import {
+  FIELD_LIMITS,
+  MAIN_GROUP_OPTIONS,
+  MAX_EXAMPLES_PER_WORD,
+} from "./constants";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { DialectCombobox } from "./DialectCombobox";
 import type { PublicDialectOption } from "./dialects-actions";
+import { toSearchKey } from "@/lib/text/normalize-arabic";
 
 export type FieldErrors = Record<string, string | undefined>;
 
@@ -19,6 +24,8 @@ interface WordCardProps {
     field: "word" | "dialect" | "msaSynonym" | "explanation",
     value: string,
   ) => void;
+  onUpdateDialect: (value: string, dialectId: string | null) => void;
+  onUpdateProvisionalMainGroup: (value: string) => void;
   onUpdateExample: (index: number, value: string) => void;
   onAddExample: () => void;
   onRemoveExample: (index: number) => void;
@@ -36,6 +43,8 @@ export function WordCard({
   errors = {},
   dialectOptions,
   onUpdateField,
+  onUpdateDialect,
+  onUpdateProvisionalMainGroup,
   onUpdateExample,
   onAddExample,
   onRemoveExample,
@@ -49,6 +58,19 @@ export function WordCard({
   const isGuided = Boolean(
     card.referencePromptId && card.referencePromptSnapshot,
   );
+  // A custom (freely-typed, unmatched) dialect label needs the contributor
+  // to declare its broad group — an existing dialect row's group is already
+  // known and derived live server-side (see submit_batch / the leaderboard
+  // aggregation), so no extra field is needed once dialectId is set.
+  const isCustomDialect = Boolean(card.dialect.trim()) && !card.dialectId;
+
+  function handleDialectChange(value: string) {
+    const key = toSearchKey(value);
+    const matched = key
+      ? dialectOptions.find((o) => toSearchKey(o.nameAr) === key)
+      : undefined;
+    onUpdateDialect(value, matched?.id ?? null);
+  }
 
   return (
     <section
@@ -139,10 +161,35 @@ export function WordCard({
           id={`${base}-dialect`}
           value={card.dialect}
           options={dialectOptions}
-          onChange={(value) => onUpdateField("dialect", value)}
+          onChange={handleDialectChange}
           error={errors.dialect}
         />
       </Field>
+
+      {isCustomDialect ? (
+        <Field
+          id={`${base}-main-group`}
+          label="تتبع أي مجموعة رئيسية؟"
+          required
+          error={errors.provisionalMainGroupCode}
+          hint="لهجتك ليست في القائمة — اختر أقرب مجموعة رئيسية لها."
+        >
+          <select
+            id={`${base}-main-group`}
+            value={card.provisionalMainGroupCode ?? ""}
+            onChange={(e) => onUpdateProvisionalMainGroup(e.target.value)}
+            className={inputClass(Boolean(errors.provisionalMainGroupCode))}
+            aria-invalid={Boolean(errors.provisionalMainGroupCode)}
+          >
+            <option value="">اختر المجموعة الرئيسية</option>
+            {MAIN_GROUP_OPTIONS.map((g) => (
+              <option key={g.code} value={g.code}>
+                {g.labelAr}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
 
       <Field
         id={`${base}-msa`}

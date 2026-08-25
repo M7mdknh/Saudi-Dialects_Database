@@ -41,7 +41,12 @@ test.describe("public contribution journey", () => {
     await page
       .getByLabel(/اللهجة أو المنطقة/)
       .nth(1)
-      .fill("سوداني");
+      .fill("لهجة محلية غير مدرجة");
+    // A dialect that doesn't match any existing taxonomy row requires the
+    // contributor to declare its broad group before submitting.
+    await page
+      .getByLabel("تتبع أي مجموعة رئيسية؟")
+      .selectOption({ label: "جنوبي" });
     await page
       .getByLabel(/المرادف بالعربية الفصحى/)
       .nth(1)
@@ -57,7 +62,7 @@ test.describe("public contribution journey", () => {
     await page.getByRole("button", { name: "إرسال المساهمة" }).click();
 
     await expect(
-      page.getByRole("heading", { name: "وصلتنا مساهمتك، وشكراً لك!" }),
+      page.getByRole("heading", { name: "وصلتنا مساهمتك، شكرًا لك!" }),
     ).toBeVisible();
   });
 

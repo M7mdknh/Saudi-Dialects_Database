@@ -17,6 +17,9 @@ export type ExportFormat = "json" | "jsonl";
 export type MainDialectGroupCode =
   "hijazi" | "najdi" | "eastern" | "northern" | "southern";
 
+export type ParticipationExclusionReason =
+  "spam" | "abuse" | "test" | "duplicate" | "invalid_submission";
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -49,6 +52,10 @@ export interface Database {
         position: number;
         reference_prompt_id: string | null;
         reference_prompt_snapshot: unknown;
+        selected_dialect_id: string | null;
+        provisional_main_group_code: MainDialectGroupCode | null;
+        admin_confirmed_main_group_code: MainDialectGroupCode | null;
+        participation_exclusion_reason: ParticipationExclusionReason | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -172,7 +179,30 @@ export interface Database {
           p_abuse_hash: string | null;
           p_abuse_hash_expires_at: string | null;
         };
-        Returns: { batch_id: string; created: boolean }[];
+        Returns: {
+          batch_id: string;
+          created: boolean;
+          affected_groups: {
+            main_group_code: string;
+            submission_count: number;
+          }[];
+        }[];
+      };
+      set_submission_participation_exclusion: {
+        Args: {
+          p_actor: string;
+          p_submission_id: string;
+          p_reason: ParticipationExclusionReason | null;
+        };
+        Returns: Database["public"]["Tables"]["raw_word_submissions"]["Row"];
+      };
+      set_submission_main_group: {
+        Args: {
+          p_actor: string;
+          p_submission_id: string;
+          p_main_group_code: MainDialectGroupCode | null;
+        };
+        Returns: Database["public"]["Tables"]["raw_word_submissions"]["Row"];
       };
       mark_submission_seen: {
         Args: { p_admin: string; p_submission: string };
@@ -312,7 +342,9 @@ export interface Database {
         Returns: {
           main_group_code: MainDialectGroupCode;
           main_group_label_ar: string;
+          submission_count: number;
           approved_word_count: number;
+          rank: number;
         }[];
       };
       public_dialect_words: {
@@ -359,6 +391,36 @@ export interface Database {
       reference_prompt_submission_counts: {
         Args: { p_actor: string };
         Returns: { reference_prompt_id: string; submission_count: number }[];
+      };
+      list_reference_prompts_page: {
+        Args: {
+          p_offset?: number | null;
+          p_limit?: number | null;
+          p_category?: string | null;
+          p_search?: string | null;
+        };
+        Returns: {
+          id: string;
+          category: string;
+          category_label_ar: string;
+          msa_lemma: string;
+          definition_ar: string;
+          scenario_ar: string;
+          part_of_speech: string;
+          answer_form: string;
+          priority: number;
+          prompt_version: number;
+          display_order: number;
+          total_count: number;
+        }[];
+      };
+      list_reference_prompt_category_counts: {
+        Args: Record<string, never>;
+        Returns: {
+          category: string;
+          category_label_ar: string;
+          prompt_count: number;
+        }[];
       };
       list_public_dialects: {
         Args: Record<string, never>;

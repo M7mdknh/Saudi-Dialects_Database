@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   FIELD_LIMITS,
+  MAIN_GROUP_CODES,
   MAX_EXAMPLES_PER_WORD,
   MAX_WORD_CARDS,
 } from "./constants";
@@ -23,43 +24,59 @@ export const exampleSchema = z.object({
     .max(FIELD_LIMITS.example, `الحد الأقصى ${FIELD_LIMITS.example} حرفاً`),
 });
 
-export const wordCardSchema = z.object({
-  clientId: z.string().min(1),
-  word: z
-    .string()
-    .trim()
-    .min(1, "الكلمة مطلوبة")
-    .max(FIELD_LIMITS.word, `الحد الأقصى ${FIELD_LIMITS.word} حرفاً`),
-  dialect: z
-    .string()
-    .trim()
-    .min(1, "اللهجة أو المنطقة مطلوبة")
-    .max(FIELD_LIMITS.dialect, `الحد الأقصى ${FIELD_LIMITS.dialect} حرفاً`),
-  msaSynonym: z
-    .string()
-    .trim()
-    .max(
-      FIELD_LIMITS.msaSynonym,
-      `الحد الأقصى ${FIELD_LIMITS.msaSynonym} حرفاً`,
-    )
-    .optional()
-    .or(z.literal("")),
-  explanation: z
-    .string()
-    .trim()
-    .max(
-      FIELD_LIMITS.explanation,
-      `الحد الأقصى ${FIELD_LIMITS.explanation} حرفاً`,
-    )
-    .optional()
-    .or(z.literal("")),
-  examples: z
-    .array(exampleSchema)
-    .min(1, "أضف مثالاً واحداً على الأقل")
-    .max(MAX_EXAMPLES_PER_WORD, `الحد الأقصى ${MAX_EXAMPLES_PER_WORD} أمثلة`),
-  referencePromptId: z.string().min(1).nullable().optional(),
-  referencePromptSnapshot: referencePromptSnapshotSchema.nullable().optional(),
-});
+export const wordCardSchema = z
+  .object({
+    clientId: z.string().min(1),
+    word: z
+      .string()
+      .trim()
+      .min(1, "الكلمة مطلوبة")
+      .max(FIELD_LIMITS.word, `الحد الأقصى ${FIELD_LIMITS.word} حرفاً`),
+    dialect: z
+      .string()
+      .trim()
+      .min(1, "اللهجة أو المنطقة مطلوبة")
+      .max(FIELD_LIMITS.dialect, `الحد الأقصى ${FIELD_LIMITS.dialect} حرفاً`),
+    /** Set only when the visitor selected an existing dialect row (main group or local) from the combobox; null for a freely-typed custom label. Drives live main-group attribution server-side. */
+    dialectId: z.string().uuid().nullable().optional(),
+    /** Required only when dialectId is null (a custom local label) — the contributor's own best guess at the broad group, kept separate from any eventual admin-confirmed classification. */
+    provisionalMainGroupCode: z.enum(MAIN_GROUP_CODES).nullable().optional(),
+    msaSynonym: z
+      .string()
+      .trim()
+      .max(
+        FIELD_LIMITS.msaSynonym,
+        `الحد الأقصى ${FIELD_LIMITS.msaSynonym} حرفاً`,
+      )
+      .optional()
+      .or(z.literal("")),
+    explanation: z
+      .string()
+      .trim()
+      .max(
+        FIELD_LIMITS.explanation,
+        `الحد الأقصى ${FIELD_LIMITS.explanation} حرفاً`,
+      )
+      .optional()
+      .or(z.literal("")),
+    examples: z
+      .array(exampleSchema)
+      .min(1, "أضف مثالاً واحداً على الأقل")
+      .max(MAX_EXAMPLES_PER_WORD, `الحد الأقصى ${MAX_EXAMPLES_PER_WORD} أمثلة`),
+    referencePromptId: z.string().min(1).nullable().optional(),
+    referencePromptSnapshot: referencePromptSnapshotSchema
+      .nullable()
+      .optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.dialectId && !val.provisionalMainGroupCode) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["provisionalMainGroupCode"],
+        message: "اختر المجموعة الرئيسية التي تتبعها هذه اللهجة",
+      });
+    }
+  });
 
 export const submissionBatchSchema = z.object({
   idempotencyKey: z.string().uuid(),

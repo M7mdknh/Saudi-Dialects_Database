@@ -1,62 +1,81 @@
-// Non-sensitive, ephemeral prompt-history tracking only — no personal data,
-// no visitor profile, no view-event tracking. Just stable prompt IDs, used
-// only to avoid repeating prompts the visitor just saw or answered.
+// Two pieces of non-sensitive, per-device state — no personal data, no
+// account, no server-side tracking. Both live in localStorage (not
+// sessionStorage): the ordered progression position and the answered set
+// are meant to persist "on this device" across visits, per the product
+// spec — a visitor who left mid-list should come back to where they were.
 
-const RECENTLY_SHOWN_KEY = "lahajat.prompts.recently-shown.v1";
-const ANSWERED_THIS_SESSION_KEY = "lahajat.prompts.answered-session.v1";
-const MAX_RECENTLY_SHOWN = 42; // ~7 rotations of 6 — old entries age out (FIFO).
+const OFFSET_KEY = "lahajat.prompts.offset.v2";
+const ANSWERED_KEY = "lahajat.prompts.answered.v2";
 
 const isBrowser = () => typeof window !== "undefined";
 
-function readIds(storage: Storage, key: string): string[] {
+function readJson<T>(
+  key: string,
+  fallback: T,
+  isValid: (v: unknown) => v is T,
+): T {
+  if (!isBrowser()) return fallback;
   try {
-    const raw = storage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((x) => typeof x === "string")
-      : [];
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed: unknown = JSON.parse(raw);
+    return isValid(parsed) ? parsed : fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function writeIds(storage: Storage, key: string, ids: string[]): void {
+function writeJson(key: string, value: unknown): void {
+  if (!isBrowser()) return;
   try {
-    storage.setItem(key, JSON.stringify(ids));
+    window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // best-effort; storage may be unavailable (private mode/quota)
   }
 }
 
-export function getRecentlyShownIds(): string[] {
-  if (!isBrowser()) return [];
-  return readIds(window.localStorage, RECENTLY_SHOWN_KEY);
+function isNonNegativeInteger(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0;
 }
 
-export function recordShownIds(ids: string[]): void {
-  if (!isBrowser() || ids.length === 0) return;
-  const existing = readIds(window.localStorage, RECENTLY_SHOWN_KEY);
-  const merged = [...existing, ...ids.filter((id) => !existing.includes(id))];
-  const trimmed = merged.slice(Math.max(0, merged.length - MAX_RECENTLY_SHOWN));
-  writeIds(window.localStorage, RECENTLY_SHOWN_KEY, trimmed);
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
-export function getAnsweredThisSessionIds(): string[] {
-  if (!isBrowser()) return [];
-  return readIds(window.sessionStorage, ANSWERED_THIS_SESSION_KEY);
+/** The visitor's current position in the ordered prompt list — recovers to 0 on corrupt/missing/invalid storage. */
+export function getPromptOffset(): number {
+  return readJson(OFFSET_KEY, 0, isNonNegativeInteger);
+}
+
+export function setPromptOffset(offset: number): void {
+  writeJson(OFFSET_KEY, Math.max(0, Math.trunc(offset)));
+}
+
+/** Prompt ids the visitor has answered (submitted a word for) on this device, ever — never expires, never blocks re-display. */
+export function getAnsweredIds(): string[] {
+  return readJson(ANSWERED_KEY, [], isStringArray);
+}
+
+export function isAnswered(id: string): boolean {
+  return getAnsweredIds().includes(id);
 }
 
 export function recordAnsweredId(id: string): void {
-  if (!isBrowser()) return;
-  const existing = readIds(window.sessionStorage, ANSWERED_THIS_SESSION_KEY);
+  const existing = getAnsweredIds();
   if (existing.includes(id)) return;
-  writeIds(window.sessionStorage, ANSWERED_THIS_SESSION_KEY, [...existing, id]);
+  writeJson(ANSWERED_KEY, [...existing, id]);
 }
 
-/** Combined exclusion list to pass to the next prompt-selection request. */
-export function getExclusionIds(): string[] {
-  return [
-    ...new Set([...getRecentlyShownIds(), ...getAnsweredThisSessionIds()]),
-  ];
+export function getAnsweredCount(): number {
+  return getAnsweredIds().length;
+}
+
+/** Explicit reset action (with user confirmation in the UI) — clears local progress only, never touches the server dataset. */
+export function resetAnsweredIds(): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(ANSWERED_KEY);
+  } catch {
+    // best-effort
+  }
 }

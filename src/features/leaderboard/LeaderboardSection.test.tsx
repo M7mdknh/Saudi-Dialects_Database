@@ -12,27 +12,45 @@ vi.mock("./actions", () => ({
 const { LeaderboardSection } = await import("./LeaderboardSection");
 
 const FIVE_GROUPS: LeaderboardEntry[] = [
-  { mainGroupCode: "hijazi", mainGroupLabelAr: "حجازي", approvedWordCount: 3 },
-  { mainGroupCode: "najdi", mainGroupLabelAr: "نجدي", approvedWordCount: 0 },
+  {
+    mainGroupCode: "hijazi",
+    mainGroupLabelAr: "حجازي",
+    submissionCount: 3,
+    approvedWordCount: 1,
+    rank: 1,
+  },
+  {
+    mainGroupCode: "najdi",
+    mainGroupLabelAr: "نجدي",
+    submissionCount: 0,
+    approvedWordCount: 0,
+    rank: 2,
+  },
   {
     mainGroupCode: "eastern",
     mainGroupLabelAr: "شرقاوي",
+    submissionCount: 0,
     approvedWordCount: 0,
+    rank: 2,
   },
   {
     mainGroupCode: "northern",
     mainGroupLabelAr: "شمالي",
+    submissionCount: 0,
     approvedWordCount: 0,
+    rank: 2,
   },
   {
     mainGroupCode: "southern",
     mainGroupLabelAr: "جنوبي",
+    submissionCount: 0,
     approvedWordCount: 0,
+    rank: 2,
   },
 ];
 
 describe("LeaderboardSection (homepage preview)", () => {
-  it("shows all five main groups even when four have zero approved words", () => {
+  it("shows all five main groups even when four have zero participation", () => {
     render(<LeaderboardSection initialEntries={FIVE_GROUPS} />);
     for (const label of ["حجازي", "نجدي", "شرقاوي", "شمالي", "جنوبي"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
@@ -56,5 +74,21 @@ describe("LeaderboardSection (homepage preview)", () => {
     await user.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
 
     await waitFor(() => expect(screen.getByText("حجازي")).toBeInTheDocument());
+  });
+
+  it("refetches when the leaderboard-updated event fires (e.g. after a successful submission)", async () => {
+    getDialectLeaderboardMock.mockResolvedValueOnce([
+      { ...FIVE_GROUPS[0], submissionCount: 4 },
+      ...FIVE_GROUPS.slice(1),
+    ]);
+    render(<LeaderboardSection initialEntries={FIVE_GROUPS} />);
+    expect(screen.getByText("٣ مساهمات")).toBeInTheDocument();
+
+    const { notifyLeaderboardUpdated } = await import("./refresh-event");
+    notifyLeaderboardUpdated();
+
+    await waitFor(() =>
+      expect(screen.getByText("٤ مساهمات")).toBeInTheDocument(),
+    );
   });
 });

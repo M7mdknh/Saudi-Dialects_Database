@@ -16,6 +16,8 @@ interface Counts {
     format: string;
     record_count: number;
   } | null;
+  unclassified_participation: number;
+  excluded_participation: number;
 }
 
 export function DashboardCounts({ counts }: { counts: Counts }) {
@@ -49,6 +51,20 @@ export function DashboardCounts({ counts }: { counts: Counts }) {
             <span className="font-bold">{counts[s]}</span>
           </Link>
         ))}
+        <div
+          className="border-warning/40 bg-warning/10 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
+          title="مساهمات تُحتسب في لوحة الصدارة لكنها غير منسوبة لأي من المجموعات الخمس بعد"
+        >
+          <span>غير مصنّفة للوحة الصدارة</span>
+          <span className="font-bold">{counts.unclassified_participation}</span>
+        </div>
+        <div
+          className="border-border bg-surface flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
+          title="مساهمات استُبعدت من الاحتساب (سبام/اختبار/تكرار/غير صالحة)"
+        >
+          <span>مستبعدة من الاحتساب</span>
+          <span className="font-bold">{counts.excluded_participation}</span>
+        </div>
       </div>
       <p className="text-foreground/60 text-xs">
         {counts.latest_export

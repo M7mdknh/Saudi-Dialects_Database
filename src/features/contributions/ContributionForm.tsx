@@ -14,7 +14,14 @@ import {
 } from "./draft-storage";
 import { messageForCode } from "./errors";
 import { mapZodIssuesToFieldErrors } from "./field-errors";
-import { CONSENT_VERSION, MAX_WORD_CARDS } from "./constants";
+import {
+  CONSENT_VERSION,
+  MAIN_GROUP_FEMININE_LABELS,
+  MAX_WORD_CARDS,
+  type MainGroupCode,
+} from "./constants";
+import { formatParticipationCount } from "@/features/leaderboard/LeaderboardList";
+import { notifyLeaderboardUpdated } from "@/features/leaderboard/refresh-event";
 import { Button } from "@/components/ui/Button";
 import {
   Turnstile,
@@ -26,15 +33,40 @@ import {
   type PublicDialectOption,
 } from "./dialects-actions";
 import { GuidedPromptRail } from "@/features/prompts/GuidedPromptRail";
-import { getGuidedPrompts } from "@/features/prompts/actions";
 import {
-  getExclusionIds,
+  listReferencePromptsPage,
+  type GuidedPromptPage,
+} from "@/features/prompts/actions";
+import { GUIDED_PROMPT_BATCH_SIZE } from "@/features/prompts/constants";
+import {
+  getAnsweredIds,
+  getPromptOffset,
   recordAnsweredId,
-  recordShownIds,
+  setPromptOffset,
 } from "@/features/prompts/prompt-history";
+import { takePendingPromptSelection } from "@/features/prompts/pending-selection";
 import type { GuidedPromptRecord } from "@/features/prompts/types";
 
 type Status = "idle" | "submitting" | "success" | "error";
+
+function isMainGroupCode(value: string): value is MainGroupCode {
+  return value in MAIN_GROUP_FEMININE_LABELS;
+}
+
+/** Natural Arabic feedback for a just-committed submission — never shown until the database transaction has actually succeeded. */
+function buildParticipationMessage(
+  acceptedEntryCount: number,
+  leaderboardUpdates: { mainGroupCode: string; submissionCount: number }[],
+): string {
+  if (acceptedEntryCount === 1 && leaderboardUpdates.length === 1) {
+    const [update] = leaderboardUpdates;
+    if (isMainGroupCode(update.mainGroupCode)) {
+      const label = MAIN_GROUP_FEMININE_LABELS[update.mainGroupCode];
+      return `أضفت مساهمة للهجة ${label}! أصبح رصيد ${label} ${formatParticipationCount(update.submissionCount)}.`;
+    }
+  }
+  return `أضفت ${formatParticipationCount(acceptedEntryCount)} إلى قاموس اللهجات السعودية.`;
+}
 
 export function ContributionForm({
   turnstileSiteKey,
@@ -43,7 +75,7 @@ export function ContributionForm({
 }: {
   turnstileSiteKey?: string;
   /** null means the server-side load failed — a real error, not a genuine empty result. */
-  initialPrompts: GuidedPromptRecord[] | null;
+  initialPrompts: GuidedPromptPage | null;
   initialDialectOptions: PublicDialectOption[];
 }) {
   const [state, dispatch] = useReducer(
@@ -52,6 +84,9 @@ export function ContributionForm({
     initialBatchState,
   );
   const [status, setStatus] = useState<Status>("idle");
+  const [participationMessage, setParticipationMessage] = useState<
+    string | null
+  >(null);
   const [errorCode, setErrorCode] = useState<string | undefined>();
   const [fieldErrors, setFieldErrors] = useState<
     Record<string, Record<string, string>>
@@ -60,9 +95,12 @@ export function ContributionForm({
   const [turnstileToken, setTurnstileToken] = useState<string>();
   const [turnstileStatus, setTurnstileStatus] =
     useState<TurnstileStatus>("loading");
-  const [prompts, setPrompts] = useState(initialPrompts ?? []);
+  const [prompts, setPrompts] = useState(initialPrompts?.rows ?? []);
+  const [promptTotal, setPromptTotal] = useState(initialPrompts?.total ?? 0);
+  const [promptOffset, setPromptOffsetState] = useState(0);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptsError, setPromptsError] = useState(initialPrompts === null);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [dialectOptions, setDialectOptions] = useState(initialDialectOptions);
   const idempotencyKey = useRef<string>("");
   const firstErrorRef = useRef<HTMLDivElement | null>(null);
@@ -70,12 +108,37 @@ export function ContributionForm({
   const turnstileRef = useRef<TurnstileHandle>(null);
   const hydrated = useRef(false);
 
+  async function loadBatch(offset: number) {
+    setPromptsLoading(true);
+    try {
+      const page = await listReferencePromptsPage({
+        offset,
+        limit: GUIDED_PROMPT_BATCH_SIZE,
+      });
+      setPrompts(page.rows);
+      setPromptTotal(page.total);
+      setPromptOffsetState(offset);
+      setPromptsError(false);
+    } catch {
+      setPromptsError(true);
+    } finally {
+      setPromptsLoading(false);
+    }
+  }
+
   useEffect(() => {
-    // Reads a browser-only external system (localStorage) once on mount to
-    // hydrate form state; this is not derivable via a useState initializer
-    // without a server/client hydration mismatch.
+    // Reads browser-only external systems (localStorage/sessionStorage) once
+    // on mount; not derivable via a useState initializer without a
+    // server/client hydration mismatch.
     idempotencyKey.current = getOrCreateIdempotencyKey();
-    if (initialPrompts) recordShownIds(initialPrompts.map((p) => p.id));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnsweredIds(new Set(getAnsweredIds()));
+
+    const storedOffset = getPromptOffset();
+    if (storedOffset > 0) void loadBatch(storedOffset);
+    else setPromptOffsetState(0);
+
+    const pending = takePendingPromptSelection();
     const draft = loadDraft();
     if (draft && draft.words.length > 0) {
       dispatch({
@@ -83,11 +146,21 @@ export function ContributionForm({
         words: draft.words,
         consent: draft.consent,
       });
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraftRestored(true);
     }
+    if (pending) {
+      dispatch({ type: "ADD_GUIDED_WORD", prompt: pending });
+      requestAnimationFrame(() => {
+        firstGuidedCardRef.current?.scrollIntoView?.({
+          block: "center",
+          behavior: "smooth",
+        });
+        const input =
+          firstGuidedCardRef.current?.querySelector<HTMLInputElement>("input");
+        input?.focus();
+      });
+    }
     hydrated.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -119,18 +192,21 @@ export function ContributionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function refreshPrompts() {
-    setPromptsLoading(true);
-    try {
-      const next = await getGuidedPrompts(getExclusionIds());
-      setPrompts(next);
-      setPromptsError(false);
-      recordShownIds(next.map((p) => p.id));
-    } catch {
-      setPromptsError(true);
-    } finally {
-      setPromptsLoading(false);
-    }
+  function goToNextBatch() {
+    if (promptTotal === 0) return;
+    const next = (promptOffset + GUIDED_PROMPT_BATCH_SIZE) % promptTotal;
+    setPromptOffset(next);
+    void loadBatch(next);
+  }
+
+  function goToPrevBatch() {
+    const prev = Math.max(0, promptOffset - GUIDED_PROMPT_BATCH_SIZE);
+    setPromptOffset(prev);
+    void loadBatch(prev);
+  }
+
+  function retryPrompts() {
+    void loadBatch(promptOffset);
   }
 
   function chooseGuidedPrompt(prompt: GuidedPromptRecord) {
@@ -184,14 +260,34 @@ export function ContributionForm({
     setStatus("submitting");
     const result = await submitBatch(parsed.data);
     if (result.ok) {
-      for (const word of state.words) {
-        if (word.referencePromptId) recordAnsweredId(word.referencePromptId);
+      const answeredPromptIds = state.words
+        .map((w) => w.referencePromptId)
+        .filter((id): id is string => Boolean(id));
+      for (const id of answeredPromptIds) recordAnsweredId(id);
+      if (answeredPromptIds.length > 0) {
+        setAnsweredIds(new Set(getAnsweredIds()));
+        // Only a guided contribution advances the ordered position —
+        // an ordinary submission must not move it unexpectedly.
+        goToNextBatch();
+      }
+      // Never an optimistic +1: this only fires once the transaction has
+      // actually committed, using the count the database just returned. An
+      // idempotent replay reports 0 accepted entries and shows nothing.
+      if (result.acceptedEntryCount > 0) {
+        setParticipationMessage(
+          buildParticipationMessage(
+            result.acceptedEntryCount,
+            result.leaderboardUpdates,
+          ),
+        );
+        notifyLeaderboardUpdated();
+      } else {
+        setParticipationMessage(null);
       }
       clearDraft();
       rotateIdempotencyKey();
       setStatus("success");
       turnstileRef.current?.reset();
-      void refreshPrompts();
       return;
     }
 
@@ -218,25 +314,45 @@ export function ContributionForm({
 
   if (status === "success") {
     return (
-      <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-8 sm:px-6">
-        <div className="border-success/30 bg-success/5 flex flex-col items-center gap-3 rounded-2xl border p-8 text-center">
-          <h1 className="text-success text-xl font-bold">
-            وصلتنا مساهمتك، وشكراً لك!
-          </h1>
-          <p className="text-foreground/80">
-            سيراجع فريقنا الكلمة قبل إضافتها إلى مجموعة بيانات لهجات. تقدر تكمّل
-            بمساهمة ثانية الحين.
+      <div className="max-w-form mx-auto flex w-full min-w-0 flex-col gap-6 px-4 py-8 sm:px-6">
+        <div className="border-success/30 bg-success/5 flex flex-col items-center gap-2 rounded-2xl border p-6 text-center">
+          <h2 className="text-success text-xl font-bold">
+            وصلتنا مساهمتك، شكرًا لك!
+          </h2>
+          <p className="text-foreground/80 text-sm">
+            سيراجع فريقنا الكلمة قبل إضافتها إلى مجموعة بيانات لهجات.
           </p>
-          <Button type="button" onClick={startAnother}>
-            إرسال مساهمة أخرى
-          </Button>
+          {participationMessage ? (
+            <p
+              role="status"
+              className="text-accent text-sm font-semibold"
+              aria-live="polite"
+            >
+              {participationMessage}
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            <Button type="button" onClick={startAnother}>
+              ساهم بكلمة أخرى
+            </Button>
+            {promptTotal > 0 ? (
+              <Button type="button" variant="secondary" onClick={goToNextBatch}>
+                انتقل للكلمات التالية
+              </Button>
+            ) : null}
+          </div>
         </div>
         <GuidedPromptRail
           prompts={prompts}
           loading={promptsLoading}
           error={promptsError}
-          onRetry={refreshPrompts}
+          onRetry={retryPrompts}
           onChoose={startAnotherWithPrompt}
+          answeredIds={answeredIds}
+          offset={promptOffset}
+          total={promptTotal}
+          onNext={goToNextBatch}
+          onPrev={goToPrevBatch}
         />
       </div>
     );
@@ -249,14 +365,15 @@ export function ContributionForm({
 
   return (
     <form
+      id="contribute"
       onSubmit={handleSubmit}
       noValidate
-      className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-6 sm:px-6"
+      className="max-w-form mx-auto flex w-full min-w-0 scroll-mt-20 flex-col gap-6 px-4 py-6 sm:px-6"
     >
       <header className="flex flex-col gap-2 text-center">
-        <h1 className="text-foreground text-2xl font-bold">
+        <h2 className="text-foreground text-2xl font-bold">
           ساهم بكلمة من لهجتك
-        </h1>
+        </h2>
         <p className="text-foreground/70">
           ساعدنا في بناء بيانات تفهم تنوّع لهجاتنا العربية.
         </p>
@@ -266,14 +383,19 @@ export function ContributionForm({
         prompts={prompts}
         loading={promptsLoading}
         error={promptsError}
-        onRetry={refreshPrompts}
+        onRetry={retryPrompts}
         onChoose={chooseGuidedPrompt}
+        answeredIds={answeredIds}
+        offset={promptOffset}
+        total={promptTotal}
+        onNext={goToNextBatch}
+        onPrev={goToPrevBatch}
       />
 
       {draftRestored ? (
         <p
           role="status"
-          className="bg-surface-muted text-foreground/80 rounded-lg px-3 py-2 text-sm"
+          className="bg-surface-muted text-foreground/80 rounded-lg px-3 py-1.5 text-xs"
         >
           تمت استعادة مسودة محفوظة من زيارة سابقة.
         </p>
@@ -312,6 +434,21 @@ export function ContributionForm({
                     type: "UPDATE_WORD",
                     clientId: card.clientId,
                     field,
+                    value,
+                  })
+                }
+                onUpdateDialect={(dialect, dialectId) =>
+                  dispatch({
+                    type: "UPDATE_DIALECT",
+                    clientId: card.clientId,
+                    dialect,
+                    dialectId,
+                  })
+                }
+                onUpdateProvisionalMainGroup={(value) =>
+                  dispatch({
+                    type: "UPDATE_PROVISIONAL_MAIN_GROUP",
+                    clientId: card.clientId,
                     value,
                   })
                 }
@@ -412,7 +549,7 @@ export function ContributionForm({
           turnstileBlocked ||
           turnstileNotReady
         }
-        className="w-full"
+        className="mx-auto w-full max-w-sm"
       >
         {status === "submitting" ? "جارٍ الإرسال…" : "إرسال المساهمة"}
       </Button>

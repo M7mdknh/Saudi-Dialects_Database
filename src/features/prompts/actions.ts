@@ -3,8 +3,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { toSearchKey } from "@/lib/text/normalize-arabic";
-import { selectGuidedPrompts, GUIDED_PROMPT_DISPLAY_COUNT } from "./selection";
 import type { GuidedPromptRecord } from "./types";
+import { GUIDED_PROMPT_BATCH_SIZE } from "./constants";
 
 function mapRow(row: {
   id: string;
@@ -32,22 +32,56 @@ function mapRow(row: {
   };
 }
 
+export interface GuidedPromptPage {
+  rows: GuidedPromptRecord[];
+  total: number;
+}
+
 /**
- * Fetches the full active guided-prompt bank server-side (small: at most a
- * few hundred rows) and returns only a rotating, category-balanced subset —
- * the full set is never sent to the browser.
+ * Ordered, paginated guided-prompt read — the homepage's predictable
+ * batch-of-6 progression and the /prompts explorer both call this. Only the
+ * requested page (never the full ~300-row pool) is ever sent to the
+ * browser; ordering is stable (reference_prompts.display_order) so the same
+ * offset always returns the same slice.
  */
-export async function getGuidedPrompts(
-  excludeIds: string[] = [],
-): Promise<GuidedPromptRecord[]> {
+export async function listReferencePromptsPage(params: {
+  offset?: number;
+  limit?: number;
+  category?: string;
+  search?: string;
+}): Promise<GuidedPromptPage> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("list_active_reference_prompts");
-  if (error) throw error;
-  const pool = (data ?? []).map(mapRow);
-  return selectGuidedPrompts(pool, {
-    excludeIds,
-    count: GUIDED_PROMPT_DISPLAY_COUNT,
+  const { data, error } = await supabase.rpc("list_reference_prompts_page", {
+    p_offset: params.offset ?? 0,
+    p_limit: params.limit ?? GUIDED_PROMPT_BATCH_SIZE,
+    p_category: params.category || null,
+    p_search: params.search?.trim() || null,
   });
+  if (error) throw error;
+  const source = data ?? [];
+  return { rows: source.map(mapRow), total: source[0]?.total_count ?? 0 };
+}
+
+export interface PromptCategoryCount {
+  category: string;
+  categoryLabelAr: string;
+  count: number;
+}
+
+/** Small (<30-row), public-safe category list with counts, for the /prompts filter panel. */
+export async function listPromptCategoryCounts(): Promise<
+  PromptCategoryCount[]
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "list_reference_prompt_category_counts",
+  );
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    category: row.category,
+    categoryLabelAr: row.category_label_ar,
+    count: row.prompt_count,
+  }));
 }
 
 // --- Admin prompt management -------------------------------------------

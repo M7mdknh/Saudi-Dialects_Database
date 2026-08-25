@@ -1,8 +1,15 @@
 import type { SubmissionBatchInput } from "./schema";
 
+export interface LeaderboardUpdate {
+  mainGroupCode: string;
+  submissionCount: number;
+}
+
 export interface SubmitBatchSuccess {
   ok: true;
   batchId: string;
+  acceptedEntryCount: number;
+  leaderboardUpdates: LeaderboardUpdate[];
 }
 
 export interface SubmitBatchFailure {
@@ -35,7 +42,12 @@ export async function submitBatch(
   }
 
   if (response.ok && isSuccessBody(body)) {
-    return { ok: true, batchId: body.batchId };
+    return {
+      ok: true,
+      batchId: body.batchId,
+      acceptedEntryCount: body.acceptedEntryCount ?? 0,
+      leaderboardUpdates: body.leaderboardUpdates ?? [],
+    };
   }
 
   if (isFailureBody(body)) {
@@ -45,7 +57,11 @@ export async function submitBatch(
   return { ok: false, code: "SERVER_ERROR" };
 }
 
-function isSuccessBody(body: unknown): body is { batchId: string } {
+function isSuccessBody(body: unknown): body is {
+  batchId: string;
+  acceptedEntryCount?: number;
+  leaderboardUpdates?: LeaderboardUpdate[];
+} {
   return (
     typeof body === "object" &&
     body !== null &&

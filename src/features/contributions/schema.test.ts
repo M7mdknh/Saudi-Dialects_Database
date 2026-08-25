@@ -11,6 +11,8 @@ function baseWord() {
     clientId: "word-1",
     word: "سبهللة",
     dialect: "حجازي",
+    dialectId: "11111111-1111-4111-8111-111111111111" as string | null,
+    provisionalMainGroupCode: null as string | null,
     msaSynonym: "بلا هدف",
     explanation: "",
     examples: [{ sentence: "راح يمشي سبهللة" }],
@@ -61,6 +63,36 @@ describe("wordCardSchema", () => {
       makeWord({ msaSynonym: "أ".repeat(201) }),
     );
     expect(result.success).toBe(false);
+  });
+
+  it("requires a provisional main group when no dialect was matched (a custom local label)", () => {
+    const result = wordCardSchema.safeParse(
+      makeWord({ dialectId: null, provisionalMainGroupCode: null }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find(
+        (i) => i.path[0] === "provisionalMainGroupCode",
+      );
+      expect(issue).toBeDefined();
+    }
+  });
+
+  it("accepts a custom dialect once a provisional main group is provided", () => {
+    const result = wordCardSchema.safeParse(
+      makeWord({ dialectId: null, provisionalMainGroupCode: "najdi" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("does not require a provisional main group when an existing dialect was matched", () => {
+    const result = wordCardSchema.safeParse(
+      makeWord({
+        dialectId: "11111111-1111-4111-8111-111111111111",
+        provisionalMainGroupCode: null,
+      }),
+    );
+    expect(result.success).toBe(true);
   });
 });
 

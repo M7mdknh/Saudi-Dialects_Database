@@ -14,6 +14,8 @@ export function emptyWordCard(guided?: GuidedPromptRecord): WordCardInput {
     clientId: makeClientId("word"),
     word: "",
     dialect: "",
+    dialectId: null,
+    provisionalMainGroupCode: null,
     msaSynonym: guided?.msaLemma ?? "",
     explanation: guided?.definitionAr ?? "",
     examples: [{ sentence: "" }],
@@ -37,6 +39,17 @@ export type BatchAction =
       type: "UPDATE_WORD";
       clientId: string;
       field: "word" | "dialect" | "msaSynonym" | "explanation";
+      value: string;
+    }
+  | {
+      type: "UPDATE_DIALECT";
+      clientId: string;
+      dialect: string;
+      dialectId: string | null;
+    }
+  | {
+      type: "UPDATE_PROVISIONAL_MAIN_GROUP";
+      clientId: string;
       value: string;
     }
   | { type: "ADD_EXAMPLE"; clientId: string }
@@ -77,6 +90,8 @@ export function batchReducer(
         clientId: makeClientId("word"),
         word: "",
         dialect: "",
+        dialectId: null,
+        provisionalMainGroupCode: null,
         msaSynonym: source.msaSynonym,
         explanation: source.explanation,
         examples: [{ sentence: "" }],
@@ -117,6 +132,31 @@ export function batchReducer(
             return w;
           return { ...w, [action.field]: action.value };
         }),
+      };
+    }
+    case "UPDATE_DIALECT": {
+      return {
+        ...state,
+        words: state.words.map((w) =>
+          w.clientId === action.clientId
+            ? { ...w, dialect: action.dialect, dialectId: action.dialectId }
+            : w,
+        ),
+      };
+    }
+    case "UPDATE_PROVISIONAL_MAIN_GROUP": {
+      return {
+        ...state,
+        words: state.words.map((w) =>
+          w.clientId === action.clientId
+            ? {
+                ...w,
+                provisionalMainGroupCode:
+                  (action.value as WordCardInput["provisionalMainGroupCode"]) ||
+                  null,
+              }
+            : w,
+        ),
       };
     }
     case "ADD_EXAMPLE": {

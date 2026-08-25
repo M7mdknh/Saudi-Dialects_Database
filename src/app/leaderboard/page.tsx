@@ -12,13 +12,14 @@ export default async function LeaderboardPage() {
   const entries = await getDialectLeaderboard();
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="max-w-shell mx-auto flex w-full flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2 text-center">
         <h1 className="text-foreground text-2xl font-bold">
-          أي لهجة جمعت كلمات أكثر؟
+          أي لهجة جمعت مساهمات أكثر؟
         </h1>
         <p className="text-foreground/70">
-          ترتيب اللهجات السعودية الخمس حسب عدد الكلمات المعتمدة والمميزة فقط.
+          كل كلمة ترسلها تضيف نقطة للهجتك، ولا تظهر الكلمات للعامة إلا بعد
+          المراجعة.
         </p>
       </header>
 

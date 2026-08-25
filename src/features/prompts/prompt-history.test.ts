@@ -1,58 +1,78 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  getAnsweredThisSessionIds,
-  getExclusionIds,
-  getRecentlyShownIds,
+  getAnsweredCount,
+  getAnsweredIds,
+  getPromptOffset,
+  isAnswered,
   recordAnsweredId,
-  recordShownIds,
+  resetAnsweredIds,
+  setPromptOffset,
 } from "./prompt-history";
 
-const RECENTLY_SHOWN_KEY = "lahajat.prompts.recently-shown.v1";
-const ANSWERED_THIS_SESSION_KEY = "lahajat.prompts.answered-session.v1";
+const OFFSET_KEY = "lahajat.prompts.offset.v2";
+const ANSWERED_KEY = "lahajat.prompts.answered.v2";
 
 beforeEach(() => {
   window.localStorage.clear();
-  window.sessionStorage.clear();
 });
 
-describe("prompt-history", () => {
-  it("round-trips recently-shown and answered ids", () => {
-    recordShownIds(["a", "b"]);
-    recordAnsweredId("a");
-    expect(getRecentlyShownIds()).toEqual(["a", "b"]);
-    expect(getAnsweredThisSessionIds()).toEqual(["a"]);
-    expect(getExclusionIds().sort()).toEqual(["a", "b"]);
+describe("prompt-history: ordered position", () => {
+  it("defaults to offset 0", () => {
+    expect(getPromptOffset()).toBe(0);
+  });
+
+  it("round-trips a stored offset", () => {
+    setPromptOffset(18);
+    expect(getPromptOffset()).toBe(18);
+  });
+
+  it("clamps a negative offset to 0", () => {
+    setPromptOffset(-5);
+    expect(getPromptOffset()).toBe(0);
   });
 
   it("recovers safely from corrupt localStorage JSON instead of throwing", () => {
-    window.localStorage.setItem(RECENTLY_SHOWN_KEY, "{not valid json");
-    expect(getRecentlyShownIds()).toEqual([]);
+    window.localStorage.setItem(OFFSET_KEY, "{not valid json");
+    expect(getPromptOffset()).toBe(0);
+  });
+
+  it("recovers safely from a non-numeric value stored under the key", () => {
+    window.localStorage.setItem(OFFSET_KEY, JSON.stringify("not a number"));
+    expect(getPromptOffset()).toBe(0);
+  });
+});
+
+describe("prompt-history: answered-on-this-device state", () => {
+  it("round-trips answered ids and never duplicates", () => {
+    recordAnsweredId("a");
+    recordAnsweredId("b");
+    recordAnsweredId("a");
+    expect(getAnsweredIds().sort()).toEqual(["a", "b"]);
+    expect(getAnsweredCount()).toBe(2);
+    expect(isAnswered("a")).toBe(true);
+    expect(isAnswered("z")).toBe(false);
+  });
+
+  it("recovers safely from corrupt localStorage JSON", () => {
+    window.localStorage.setItem(ANSWERED_KEY, "]][[");
+    expect(getAnsweredIds()).toEqual([]);
     // A subsequent write must still work after the corrupt read.
-    recordShownIds(["x"]);
-    expect(getRecentlyShownIds()).toEqual(["x"]);
+    recordAnsweredId("x");
+    expect(getAnsweredIds()).toEqual(["x"]);
   });
 
   it("recovers safely from a non-array value stored under the key", () => {
     window.localStorage.setItem(
-      RECENTLY_SHOWN_KEY,
+      ANSWERED_KEY,
       JSON.stringify({ not: "an array" }),
     );
-    expect(getRecentlyShownIds()).toEqual([]);
+    expect(getAnsweredIds()).toEqual([]);
   });
 
-  it("recovers safely from corrupt sessionStorage JSON", () => {
-    window.sessionStorage.setItem(ANSWERED_THIS_SESSION_KEY, "]][[");
-    expect(getAnsweredThisSessionIds()).toEqual([]);
-  });
-
-  it("ages out the oldest recently-shown ids once the cap is exceeded (exhaustion never permanently blocks all prompts)", () => {
-    for (let batch = 0; batch < 10; batch += 1) {
-      recordShownIds(Array.from({ length: 6 }, (_, i) => `batch${batch}-${i}`));
-    }
-    const ids = getRecentlyShownIds();
-    expect(ids.length).toBeLessThanOrEqual(42);
-    // The earliest batch must have aged out (FIFO), proving the exclusion
-    // list itself cannot grow without bound and lock a visitor out forever.
-    expect(ids).not.toContain("batch0-0");
+  it("reset clears local progress without throwing when nothing was stored", () => {
+    expect(() => resetAnsweredIds()).not.toThrow();
+    recordAnsweredId("a");
+    resetAnsweredIds();
+    expect(getAnsweredIds()).toEqual([]);
   });
 });
