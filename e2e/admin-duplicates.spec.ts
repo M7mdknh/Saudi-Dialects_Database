@@ -111,8 +111,9 @@ test.describe("duplicate-management center (live local Supabase)", () => {
     await expect(
       page.getByRole("heading", { name: "مساحة الدمج" }),
     ).toBeVisible();
-    await expect(page.getByText("اللهجة: hijazi")).toHaveCount(2);
-    await expect(page.getByText("اللهجة: najdi")).toHaveCount(1);
+    const baseCandidates = page.getByTestId("base-candidates");
+    await expect(baseCandidates.getByText("حجازي")).toHaveCount(2);
+    await expect(baseCandidates.getByText("نجدي")).toHaveCount(1);
 
     await page.getByRole("button", { name: "دمج وحفظ" }).click();
     await page.waitForURL(/\/admin\/duplicates/, { timeout: 30_000 });

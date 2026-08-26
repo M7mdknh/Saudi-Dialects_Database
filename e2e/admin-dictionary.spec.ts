@@ -138,6 +138,7 @@ test.describe("dictionary editor (live local Supabase)", () => {
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "mutates shared entry");
+    test.setTimeout(60_000);
 
     await page.goto(`/admin/dictionary/${ENTRY_ID}`);
     await page.getByLabel("ظهور الكلمة").selectOption("private");
@@ -281,6 +282,10 @@ test.describe("dictionary editor (live local Supabase)", () => {
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "mutates shared entry");
+    // This test polls the ISR-cached explorer for up to 35s (below) — the
+    // default 30s per-test timeout must be raised or the test aborts
+    // before its own poll window elapses.
+    test.setTimeout(90_000);
 
     // /dialects/[slug] uses `revalidate = 30` (ISR) — under heavy parallel
     // suite load a request can land on a page generated up to 30s earlier,

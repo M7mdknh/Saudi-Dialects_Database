@@ -437,10 +437,12 @@ export interface Database {
           member_type: "raw" | "canonical";
           member_id: string;
           word: string;
+          dialect_id: string | null;
+          dialect_ids: string[] | null;
           main_group_code: MainDialectGroupCode | null;
           local_dialect_label: string | null;
           meaning: string | null;
-          msa_synonym: string | null;
+          msa_synonyms: string[] | null;
           examples: { id: string; sentence: string }[];
           related_words: string[] | null;
           concept_id: string | null;
@@ -473,7 +475,7 @@ export interface Database {
           p_expected_version: number | null;
           p_canonical_word: string;
           p_canonical_word_search_key: string;
-          p_canonical_dialect_id: string;
+          p_dialect_ids: string[];
           p_canonical_msa_synonyms: string[];
           p_canonical_explanation: string;
           p_examples: unknown;

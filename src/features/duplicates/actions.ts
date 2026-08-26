@@ -171,10 +171,15 @@ export interface DuplicateGroupMember {
   memberType: "raw" | "canonical";
   memberId: string;
   word: string;
+  /** The member's own single dialect (raw: selected_dialect_id; canonical: canonical_dialect_id — the legacy "primary"). */
+  dialectId: string | null;
+  /** Full dialect set: raw members have exactly one (or zero); canonical members have every dialect currently assigned via canonical_entry_dialects, unioned with the primary — see migration 0029. */
+  dialectIds: string[];
   mainGroupCode: MainDialectGroupCode | null;
   localDialectLabel: string | null;
   meaning: string | null;
-  msaSynonym: string | null;
+  /** Raw: the submitter's single MSA synonym (0 or 1 entries). Canonical: the entry's full canonical_msa_synonyms array. */
+  msaSynonyms: string[];
   examples: { id: string; sentence: string }[];
   relatedWords: string[];
   conceptId: string | null;
@@ -197,10 +202,12 @@ export async function getDuplicateGroupMembers(
     memberType: row.member_type,
     memberId: row.member_id,
     word: row.word,
+    dialectId: row.dialect_id,
+    dialectIds: row.dialect_ids ?? [],
     mainGroupCode: row.main_group_code,
     localDialectLabel: row.local_dialect_label,
     meaning: row.meaning,
-    msaSynonym: row.msa_synonym,
+    msaSynonyms: row.msa_synonyms ?? [],
     examples: row.examples ?? [],
     relatedWords: row.related_words ?? [],
     conceptId: row.concept_id,
@@ -244,7 +251,8 @@ export interface MergeDuplicateGroupInput {
   targetEntryId: string | null;
   expectedVersion: number | null;
   word: string;
-  dialectId: string;
+  /** Every main-group and local dialect the admin selected — written transactionally to canonical_entry_dialects; the first entry becomes the synchronized legacy canonical_dialect_id. */
+  dialectIds: string[];
   msaSynonyms: string[];
   explanation: string;
   examples: {
@@ -272,7 +280,7 @@ export async function mergeDuplicateGroup(input: MergeDuplicateGroupInput) {
     p_expected_version: input.expectedVersion,
     p_canonical_word: input.word,
     p_canonical_word_search_key: toSearchKey(input.word),
-    p_canonical_dialect_id: input.dialectId,
+    p_dialect_ids: input.dialectIds,
     p_canonical_msa_synonyms: input.msaSynonyms,
     p_canonical_explanation: input.explanation,
     p_examples: input.examples.map((e) => ({

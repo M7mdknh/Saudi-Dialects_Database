@@ -1,3 +1,4 @@
+import { formatArabicCount } from "@/features/leaderboard/format";
 import type {
   DuplicateCandidateType,
   DuplicateGroupStatus,
@@ -32,3 +33,17 @@ export const SORT_LABELS_AR = {
   largest: "الأكبر عددًا",
   strongest: "الأقوى تطابقًا",
 } as const;
+
+/** "٣ مصادر" / "مصدران" / "مصدر واحد" — beside each detected dialect in the merge workspace. */
+export function formatSourceCount(n: number): string {
+  return formatArabicCount(n, "مصدر", "مصدران", "مصادر");
+}
+
+export const REGISTER_LABELS_AR: Record<string, string> = {
+  neutral: "محايد",
+  informal: "غير رسمي",
+  slang: "عامي",
+  offensive: "مسيء",
+  taboo: "محظور",
+  archaic: "قديم الاستخدام",
+};

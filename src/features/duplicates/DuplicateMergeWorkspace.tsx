@@ -9,18 +9,28 @@ import {
   type DuplicateGroupMember,
   type DuplicateGroupRow,
 } from "./actions";
+import { countMainDialects, pickDefaultMainDialect } from "./dialect-selection";
 import {
   CANDIDATE_TYPE_LABELS_AR,
+  MAIN_GROUP_LABELS_AR,
+  REGISTER_LABELS_AR,
   RESOLUTION_STATUS_LABELS_AR,
+  formatSourceCount,
 } from "./labels";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ALLOWED_REGISTERS } from "@/features/exports/projection";
-import type { PublicVisibility } from "@/lib/supabase/types";
+import { toSearchKey } from "@/lib/text/normalize-arabic";
+import type {
+  MainDialectGroupCode,
+  PublicVisibility,
+} from "@/lib/supabase/types";
 
 interface DialectOption {
   id: string;
   name_ar: string;
+  main_group_code: MainDialectGroupCode | null;
+  parent_id: string | null;
 }
 
 interface ExampleRow {
@@ -31,14 +41,9 @@ interface ExampleRow {
   sourceType: "raw" | "canonical";
 }
 
-const REGISTER_LABELS_AR: Record<string, string> = {
-  neutral: "محايد",
-  informal: "غير رسمي",
-  slang: "عامي",
-  offensive: "مسيء",
-  taboo: "محظور",
-  archaic: "قديم الاستخدام",
-};
+function memberLabel(m: DuplicateGroupMember): string {
+  return m.memberType === "canonical" ? "الكيان المعتمد الحالي" : m.word;
+}
 
 export function DuplicateMergeWorkspace({
   row,
@@ -59,30 +64,104 @@ export function DuplicateMergeWorkspace({
   const canonicalMember = members.find((m) => m.memberType === "canonical");
   const rawMembers = members.filter((m) => m.memberType === "raw");
 
-  const [targetEntryId, setTargetEntryId] = useState<string | null>(
-    canonicalMember?.memberId ?? null,
+  const mainGroupDialectRow = useMemo(() => {
+    const map = new Map<MainDialectGroupCode, DialectOption>();
+    for (const d of dialects) {
+      if (!d.parent_id && d.main_group_code) map.set(d.main_group_code, d);
+    }
+    return map;
+  }, [dialects]);
+
+  const mainDialectCounts = useMemo(
+    () =>
+      countMainDialects(
+        rawMembers.map((m) => ({ mainGroupCode: m.mainGroupCode })),
+      ),
+    [rawMembers],
   );
-  const [word, setWord] = useState(
-    canonicalMember?.word ?? rawMembers[0]?.word ?? row.word,
+
+  // --- Base candidate: which source's content pre-fills the editable
+  // fields below. Real state (not a derived/recomputed condition), so it
+  // survives rerenders and unrelated field edits — see the regression test
+  // for the bug this replaces (every raw candidate's radio always
+  // rendered "checked" based on rawMembers[0] regardless of which one was
+  // actually clicked).
+  const [selectedBaseId, setSelectedBaseId] = useState<string>(
+    () =>
+      canonicalMember?.memberId ??
+      rawMembers[0]?.memberId ??
+      members[0]?.memberId ??
+      "",
   );
-  const [dialectId, setDialectId] = useState(dialects[0]?.id ?? "");
+  const selectedBaseMember = members.find((m) => m.memberId === selectedBaseId);
+
+  // Merging into the existing canonical entry vs. creating a new one is a
+  // separate choice from "which source's wording to start from" — picking
+  // a raw candidate as the content basis does not, by itself, mean giving
+  // up the existing canonical entry as the record being updated.
+  const [mergeIntoExisting, setMergeIntoExisting] = useState(!!canonicalMember);
+  const targetEntryId =
+    canonicalMember && mergeIntoExisting ? canonicalMember.memberId : null;
+
+  const [word, setWord] = useState(selectedBaseMember?.word ?? row.word);
   const [explanation, setExplanation] = useState(
-    canonicalMember?.meaning ?? members.find((m) => m.meaning)?.meaning ?? "",
+    selectedBaseMember?.meaning ?? "",
   );
-  const [msaSynonyms, setMsaSynonyms] = useState<string[]>(() => {
-    const all = members.flatMap((m) => (m.msaSynonym ? [m.msaSynonym] : []));
-    return [...new Set(all)];
-  });
+  const [msaSynonyms, setMsaSynonyms] = useState<string[]>(
+    selectedBaseMember?.msaSynonyms ?? [],
+  );
   const [newSynonym, setNewSynonym] = useState("");
+  const [conceptId, setConceptId] = useState(
+    selectedBaseMember?.conceptId ?? "",
+  );
+  const [register, setRegister] = useState(selectedBaseMember?.register ?? "");
+
   const [relatedWords, setRelatedWords] = useState<string[]>(() => [
     ...new Set(members.flatMap((m) => m.relatedWords)),
   ]);
   const [newRelatedWord, setNewRelatedWord] = useState("");
-  const [conceptId, setConceptId] = useState(canonicalMember?.conceptId ?? "");
-  const [register, setRegister] = useState(canonicalMember?.register ?? "");
   const [visibility, setVisibility] = useState<PublicVisibility>(
     canonicalMember?.publicVisibility ?? "public",
   );
+
+  // --- Dialect multi-select: preserve everything the existing canonical
+  // entry already has, plus the deterministically-preselected majority
+  // main dialect among the raw candidates (never removed automatically).
+  const [selectedDialectIds, setSelectedDialectIds] = useState<Set<string>>(
+    () => {
+      const defaultCode = pickDefaultMainDialect({
+        counts: mainDialectCounts,
+        canonicalPrimaryCode: canonicalMember?.mainGroupCode ?? null,
+        baseCandidateCode: selectedBaseMember?.mainGroupCode ?? null,
+      });
+      const ids = new Set<string>(canonicalMember?.dialectIds ?? []);
+      const defaultRow = defaultCode
+        ? mainGroupDialectRow.get(defaultCode)
+        : null;
+      if (defaultRow) ids.add(defaultRow.id);
+      return ids;
+    },
+  );
+
+  function toggleDialect(id: string) {
+    setSelectedDialectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectBase(m: DuplicateGroupMember) {
+    setSelectedBaseId(m.memberId);
+    setWord(m.word);
+    setExplanation(m.meaning ?? "");
+    setMsaSynonyms(m.msaSynonyms);
+    setConceptId(m.conceptId ?? "");
+    setRegister(m.register ?? "");
+    // Examples and dialect assignments are managed independently (below)
+    // and are never discarded or reset by changing the content basis.
+  }
 
   const allExamples: ExampleRow[] = useMemo(
     () =>
@@ -91,12 +170,23 @@ export function DuplicateMergeWorkspace({
           id: e.id,
           sentence: e.sentence,
           sourceMemberId: m.memberId,
-          sourceWord: m.word,
+          sourceWord: memberLabel(m),
           sourceType: m.memberType,
         })),
       ),
     [members],
   );
+
+  const duplicateSentenceKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of allExamples) {
+      const key = toSearchKey(e.sentence);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set(
+      [...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k),
+    );
+  }, [allExamples]);
 
   const [selectedExampleIds, setSelectedExampleIds] = useState<Set<string>>(
     () => new Set(allExamples.map((e) => e.id)),
@@ -110,6 +200,31 @@ export function DuplicateMergeWorkspace({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  const examplesBySource = useMemo(() => {
+    const groups = new Map<string, ExampleRow[]>();
+    for (const e of allExamples) {
+      const list = groups.get(e.sourceMemberId) ?? [];
+      list.push(e);
+      groups.set(e.sourceMemberId, list);
+    }
+    return groups;
+  }, [allExamples]);
+
+  function toggleSourceExamples(sourceMemberId: string) {
+    const groupIds = (examplesBySource.get(sourceMemberId) ?? []).map(
+      (e) => e.id,
+    );
+    const allSelected = groupIds.every((id) => selectedExampleIds.has(id));
+    setSelectedExampleIds((prev) => {
+      const next = new Set(prev);
+      for (const id of groupIds) {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
   }
@@ -163,7 +278,7 @@ export function DuplicateMergeWorkspace({
             ? (canonicalMember?.version ?? null)
             : null,
           word,
-          dialectId,
+          dialectIds: [...selectedDialectIds],
           msaSynonyms,
           explanation,
           examples: selectedExamples,
@@ -221,8 +336,18 @@ export function DuplicateMergeWorkspace({
     .filter((e) => selectedExampleIds.has(e.id))
     .map((e) => editedSentences[e.id] ?? e.sentence);
 
+  const selectedDialectLabels = [...selectedDialectIds]
+    .map((id) => dialects.find((d) => d.id === id))
+    .filter((d): d is DialectOption => !!d)
+    .map((d) =>
+      d.parent_id ? d.name_ar : MAIN_GROUP_LABELS_AR[d.main_group_code!],
+    );
+
+  const mainGroupDialects = dialects.filter((d) => !d.parent_id);
+  const localDialects = dialects.filter((d) => d.parent_id);
+
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-24">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">مساحة الدمج</h1>
         <span className="bg-surface-muted rounded-full px-2 py-0.5 text-xs font-semibold">
@@ -249,147 +374,295 @@ export function DuplicateMergeWorkspace({
         </div>
       ) : null}
 
+      {/* 1. اختيار الأساس */}
       <section className="border-border bg-surface rounded-2xl border p-4">
-        <h2 className="text-foreground/70 mb-3 text-sm font-bold">المصادر</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {members.map((m) => (
-            <div
-              key={m.memberId}
-              className={`rounded-xl border p-3 ${
-                targetEntryId === m.memberId
-                  ? "border-accent bg-accent/5"
-                  : "border-border"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold">{m.word}</span>
+        <h2 className="text-foreground/70 mb-3 text-sm font-bold">
+          اختيار الأساس
+        </h2>
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          data-testid="base-candidates"
+        >
+          {members.map((m) => {
+            const isSelected = selectedBaseId === m.memberId;
+            return (
+              <button
+                key={m.memberId}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => selectBase(m)}
+                className={`flex flex-col gap-1 rounded-xl border-2 p-3 text-start transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                  isSelected
+                    ? "border-accent bg-accent/10"
+                    : "border-border hover:bg-surface-muted"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold">{m.word}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isSelected
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-surface-muted"
+                    }`}
+                  >
+                    {isSelected ? "الأساس المختار ✓" : "اختيار كأساس"}
+                  </span>
+                </div>
                 {m.memberType === "canonical" ? (
-                  <span className="bg-surface-muted rounded-full px-2 py-0.5 text-xs">
+                  <span className="text-foreground/60 text-xs">
                     كيان معتمد حالياً
                   </span>
-                ) : (
-                  <label className="flex items-center gap-1 text-xs">
-                    <input
-                      type="radio"
-                      name="target-entry"
-                      checked={
-                        targetEntryId === null &&
-                        rawMembers[0]?.memberId === m.memberId
-                      }
-                      onChange={() => setTargetEntryId(null)}
-                    />
-                    اجعلها الأساس
-                  </label>
-                )}
-              </div>
-              <p className="text-foreground/70 text-sm">
-                اللهجة: {m.mainGroupCode ?? "—"}{" "}
-                {m.localDialectLabel ? `(${m.localDialectLabel})` : ""}
-              </p>
-              <p className="text-foreground/70 text-sm">
-                المرادف: {m.msaSynonym || "—"}
-              </p>
-              {m.meaning ? (
-                <p className="text-foreground/70 text-sm">{m.meaning}</p>
-              ) : null}
-            </div>
-          ))}
+                ) : null}
+                <p className="text-foreground/70 text-xs">
+                  {m.mainGroupCode
+                    ? MAIN_GROUP_LABELS_AR[m.mainGroupCode]
+                    : "—"}
+                  {m.localDialectLabel ? ` (${m.localDialectLabel})` : ""}
+                </p>
+                {m.meaning ? (
+                  <p className="text-foreground/70 line-clamp-2 text-xs">
+                    {m.meaning}
+                  </p>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
         {canonicalMember ? (
-          <div className="mt-3 flex gap-4 text-sm">
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="target-entry"
-                checked={targetEntryId === canonicalMember.memberId}
-                onChange={() => setTargetEntryId(canonicalMember.memberId)}
-              />
-              الدمج داخل الكيان المعتمد الحالي
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="target-entry"
-                checked={targetEntryId === null}
-                onChange={() => setTargetEntryId(null)}
-              />
-              إنشاء كيان معتمد جديد
-            </label>
-          </div>
+          <label className="mt-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={mergeIntoExisting}
+              onChange={(e) => setMergeIntoExisting(e.target.checked)}
+            />
+            الدمج داخل الكيان المعتمد الحالي (بدل إنشاء كيان جديد)
+          </label>
         ) : null}
       </section>
 
-      <section className="border-border bg-surface rounded-2xl border p-4">
-        <h2 className="text-foreground/70 mb-3 text-sm font-bold">
-          القيم الكنسية النهائية
+      {/* 2. بيانات الكلمة النهائية */}
+      <section className="border-border bg-surface flex flex-col gap-3 rounded-2xl border p-4">
+        <h2 className="text-foreground/70 text-sm font-bold">
+          بيانات الكلمة النهائية
         </h2>
-        <div className="flex flex-col gap-3">
-          <Field id="dup-merge-word" label="الكلمة المعتمدة">
-            <input
-              id="dup-merge-word"
-              value={word}
-              onChange={(e) => setWord(e.target.value)}
-              className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
-            />
-          </Field>
-          <Field id="dup-merge-dialect" label="اللهجة المحلية المعتمدة">
-            <select
-              id="dup-merge-dialect"
-              value={dialectId}
-              onChange={(e) => setDialectId(e.target.value)}
-              className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
-            >
-              {dialects.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name_ar}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field id="dup-merge-explanation" label="المعنى المعتمد">
-            <textarea
-              id="dup-merge-explanation"
-              value={explanation}
-              onChange={(e) => setExplanation(e.target.value)}
-              rows={3}
-              className="border-border bg-surface w-full rounded-lg border px-3 py-2"
-            />
-          </Field>
+        <Field id="dup-merge-word" label="الكلمة المعتمدة">
+          <input
+            id="dup-merge-word"
+            value={word}
+            onChange={(e) => setWord(e.target.value)}
+            className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+          />
+        </Field>
+        <Field id="dup-merge-explanation" label="المعنى المعتمد">
+          <textarea
+            id="dup-merge-explanation"
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            rows={3}
+            className="border-border bg-surface w-full rounded-lg border px-3 py-2"
+          />
+        </Field>
 
-          <div>
-            <p className="mb-1 text-sm font-semibold">المرادفات الفصيحة</p>
-            <ul className="mb-2 flex flex-wrap gap-2">
-              {msaSynonyms.map((s) => (
-                <li
-                  key={s}
-                  className="bg-surface-muted flex items-center gap-1 rounded-full px-2 py-1 text-sm"
+        <div>
+          <p className="mb-1 text-sm font-semibold">المرادفات الفصيحة</p>
+          <ul className="mb-2 flex flex-wrap gap-2">
+            {msaSynonyms.map((s) => (
+              <li
+                key={s}
+                className="bg-surface-muted flex items-center gap-1 rounded-full px-2 py-1 text-sm"
+              >
+                {s}
+                <button
+                  type="button"
+                  aria-label={`إزالة ${s}`}
+                  onClick={() =>
+                    setMsaSynonyms((prev) => prev.filter((x) => x !== s))
+                  }
                 >
-                  {s}
-                  <button
-                    type="button"
-                    aria-label={`إزالة ${s}`}
-                    onClick={() =>
-                      setMsaSynonyms((prev) => prev.filter((x) => x !== s))
-                    }
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
-              <input
-                value={newSynonym}
-                onChange={(e) => setNewSynonym(e.target.value)}
-                className="border-border bg-surface min-h-11 flex-1 rounded-lg border px-3 py-2"
-                placeholder="إضافة مرادف"
-              />
-              <Button type="button" variant="secondary" onClick={addSynonym}>
-                إضافة
-              </Button>
-            </div>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <input
+              value={newSynonym}
+              onChange={(e) => setNewSynonym(e.target.value)}
+              className="border-border bg-surface min-h-11 flex-1 rounded-lg border px-3 py-2"
+              placeholder="إضافة مرادف"
+            />
+            <Button type="button" variant="secondary" onClick={addSynonym}>
+              إضافة
+            </Button>
           </div>
+        </div>
 
+        {/* اللهجات التي تُستخدم فيها الكلمة */}
+        <div>
+          <p className="mb-1 text-sm font-semibold">
+            اللهجات التي تُستخدم فيها الكلمة
+          </p>
+          {selectedDialectIds.size === 0 ? (
+            <p className="text-danger text-sm">
+              اختر لهجة رئيسية واحدة على الأقل.
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {mainGroupDialects.map((d) => {
+              const code = d.main_group_code!;
+              const count = mainDialectCounts[code] ?? 0;
+              const isChecked = selectedDialectIds.has(d.id);
+              return (
+                <label
+                  key={d.id}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+                    isChecked ? "border-accent bg-accent/10" : "border-border"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleDialect(d.id)}
+                  />
+                  {MAIN_GROUP_LABELS_AR[code]}
+                  {count > 0 ? (
+                    <span className="text-foreground/60 text-xs">
+                      — {formatSourceCount(count)}
+                    </span>
+                  ) : null}
+                </label>
+              );
+            })}
+          </div>
+          {localDialects.length > 0 ? (
+            <>
+              <p className="text-foreground/60 mt-2 mb-1 text-xs font-semibold">
+                لهجات محلية مكتشفة
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {localDialects
+                  .filter(
+                    (d) =>
+                      selectedDialectIds.has(d.id) ||
+                      members.some((m) => m.dialectIds.includes(d.id)),
+                  )
+                  .map((d) => {
+                    const isChecked = selectedDialectIds.has(d.id);
+                    const count = rawMembers.filter((m) =>
+                      m.dialectIds.includes(d.id),
+                    ).length;
+                    return (
+                      <label
+                        key={d.id}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+                          isChecked
+                            ? "border-accent bg-accent/10"
+                            : "border-border"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleDialect(d.id)}
+                        />
+                        {d.name_ar}
+                        {count > 0 ? (
+                          <span className="text-foreground/60 text-xs">
+                            — {formatSourceCount(count)}
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <Field id="dup-merge-visibility" label="ظهور الكلمة">
+          <select
+            id="dup-merge-visibility"
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as PublicVisibility)}
+            className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+          >
+            <option value="public">عام</option>
+            <option value="private">خاص</option>
+          </select>
+        </Field>
+      </section>
+
+      {/* 3. الأمثلة */}
+      <section className="border-border bg-surface flex flex-col gap-4 rounded-2xl border p-4">
+        <h2 className="text-foreground/70 text-sm font-bold">الأمثلة</h2>
+        {[...examplesBySource.entries()].map(([sourceMemberId, group]) => {
+          const allSelected = group.every((e) => selectedExampleIds.has(e.id));
+          return (
+            <div key={sourceMemberId} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">
+                  {group[0]?.sourceWord}
+                  {group[0]?.sourceType === "canonical" ? " (كيان معتمد)" : ""}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => toggleSourceExamples(sourceMemberId)}
+                >
+                  {allSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                </Button>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {group.map((e) => {
+                  const isDuplicate = duplicateSentenceKeys.has(
+                    toSearchKey(e.sentence),
+                  );
+                  return (
+                    <li key={e.id} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        id={`dup-ex-${e.id}`}
+                        checked={selectedExampleIds.has(e.id)}
+                        onChange={() => toggleExample(e.id)}
+                        className="mt-2"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={editedSentences[e.id] ?? e.sentence}
+                            onChange={(ev) =>
+                              setEditedSentences((prev) => ({
+                                ...prev,
+                                [e.id]: ev.target.value,
+                              }))
+                            }
+                            disabled={!selectedExampleIds.has(e.id)}
+                            className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2 disabled:opacity-50"
+                          />
+                          {isDuplicate ? (
+                            <span className="bg-danger/10 text-danger shrink-0 rounded-full px-2 py-0.5 text-xs">
+                              مكرر
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </section>
+
+      {/* 4. حقول إضافية (collapsible) */}
+      <details className="border-border bg-surface rounded-2xl border p-4">
+        <summary className="text-foreground/70 cursor-pointer text-sm font-bold">
+          حقول إضافية
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
           <div>
             <p className="mb-1 text-sm font-semibold">كلمات ذات صلة</p>
             <ul className="mb-2 flex flex-wrap gap-2">
@@ -453,94 +726,8 @@ export function DuplicateMergeWorkspace({
               ))}
             </select>
           </Field>
-
-          <Field id="dup-merge-visibility" label="ظهور الكلمة">
-            <select
-              id="dup-merge-visibility"
-              value={visibility}
-              onChange={(e) =>
-                setVisibility(e.target.value as PublicVisibility)
-              }
-              className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
-            >
-              <option value="public">عام</option>
-              <option value="private">خاص</option>
-            </select>
-          </Field>
         </div>
-      </section>
-
-      <section className="border-border bg-surface rounded-2xl border p-4">
-        <h2 className="text-foreground/70 mb-3 text-sm font-bold">
-          اختر الأمثلة من كل مصدر (يمكن تعديلها)
-        </h2>
-        <ul className="flex flex-col gap-2">
-          {allExamples.map((e) => (
-            <li key={e.id} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                id={`dup-ex-${e.id}`}
-                checked={selectedExampleIds.has(e.id)}
-                onChange={() => toggleExample(e.id)}
-                className="mt-2"
-              />
-              <div className="flex-1">
-                <input
-                  value={editedSentences[e.id] ?? e.sentence}
-                  onChange={(ev) =>
-                    setEditedSentences((prev) => ({
-                      ...prev,
-                      [e.id]: ev.target.value,
-                    }))
-                  }
-                  disabled={!selectedExampleIds.has(e.id)}
-                  className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2 disabled:opacity-50"
-                />
-                <span className="text-foreground/50 text-xs">
-                  من: {e.sourceWord}
-                  {e.sourceType === "canonical" ? " (كيان معتمد)" : ""}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="border-border bg-surface rounded-2xl border p-4">
-        <h2 className="text-foreground/70 mb-3 text-sm font-bold">
-          معاينة السجل النهائي
-        </h2>
-        <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-foreground/60">الكلمة</dt>
-            <dd className="font-semibold">{word}</dd>
-          </div>
-          <div>
-            <dt className="text-foreground/60">المعنى</dt>
-            <dd>{explanation || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-foreground/60">المرادفات</dt>
-            <dd>{msaSynonyms.join("، ") || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-foreground/60">كلمات ذات صلة</dt>
-            <dd>{relatedWords.join("، ") || "—"}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-foreground/60">
-              الأمثلة ({previewExamples.length})
-            </dt>
-            <dd>
-              <ul className="list-disc pr-4">
-                {previewExamples.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        </dl>
-      </section>
+      </details>
 
       {status === "error" ? (
         <p role="alert" className="text-danger text-sm">
@@ -548,34 +735,63 @@ export function DuplicateMergeWorkspace({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={pending || previewExamples.length === 0}
-          onClick={handleMerge}
-        >
-          {pending && status === "saving" ? "جارٍ الدمج…" : "دمج وحفظ"}
-        </Button>
-        {row.resolutionStatus === "unresolved" ? (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending}
-              onClick={() => handleQuickResolve("not_duplicate")}
-            >
-              ليست مكررة
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => handleQuickResolve("ignored")}
-            >
-              تجاهل حالياً
-            </Button>
-          </>
-        ) : null}
+      {/* Sticky summary + primary action */}
+      <div className="border-border bg-surface sticky bottom-0 flex flex-col gap-2 rounded-2xl border p-4 shadow-lg">
+        <dl className="text-foreground/70 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div>
+            <dt className="text-foreground/50">الكلمة</dt>
+            <dd className="text-foreground font-semibold">{word || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-foreground/50">اللهجات</dt>
+            <dd className="text-foreground font-semibold">
+              {selectedDialectLabels.join("، ") || "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-foreground/50">الأمثلة المحدَّدة</dt>
+            <dd className="text-foreground font-semibold">
+              {previewExamples.length}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-foreground/50">المصادر المدموجة</dt>
+            <dd className="text-foreground font-semibold">{members.length}</dd>
+          </div>
+        </dl>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            disabled={
+              pending ||
+              previewExamples.length === 0 ||
+              selectedDialectIds.size === 0
+            }
+            onClick={handleMerge}
+          >
+            {pending && status === "saving" ? "جارٍ الدمج…" : "دمج وحفظ"}
+          </Button>
+          {row.resolutionStatus === "unresolved" ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => handleQuickResolve("not_duplicate")}
+              >
+                ليست مكررة
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => handleQuickResolve("ignored")}
+              >
+                تجاهل حالياً
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   );
