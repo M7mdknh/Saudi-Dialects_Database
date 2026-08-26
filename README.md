@@ -103,7 +103,15 @@ receives the six prompts chosen for the current visitor.
    `0005_seed_dialects` → `0006_dashboard_helpers` → `0007_dialect_admin_functions` →
    `0008_classify_function` → `0009_export_log` → `0010_reference_prompts` →
    `0011_prompt_linkage` → `0012_saudi_classification` → `0013_public_functions` →
-   `0014_prompt_admin_functions` → `0015_seed_reference_prompts` (generated, see above).
+   `0014_prompt_admin_functions` → `0015_seed_reference_prompts` (generated, see above) →
+   `0016_optional_msa_synonym_and_public_dialects` → `0017_approve_transaction_fix` →
+   `0018_prompt_ordering_and_pagination` → `0019_participation_leaderboard` →
+   `0020_rename_makki_to_makkawi` → `0021_leaderboard_true_ties` →
+   `0022_visibility_and_bulk_approval` → `0023_dialect_validation_hardening` →
+   `0024_bulk_approve_rpc` → `0025_dictionary_v4_fields` (additive: adds
+   `concept_id`, `register`, and `related_words` to `canonical_entries` for the v4
+   export below — every column is nullable or defaults to `'{}'`, so no existing
+   row or export is affected).
 
 3. (Optional but recommended) Regenerate TypeScript types from the deployed schema and
    replace the hand-maintained `src/lib/supabase/types.ts`:
@@ -132,15 +140,15 @@ Copy `.env.example` to `.env.local` and fill in real values. Never commit real s
 variables as before cover guided prompts, the leaderboard, and the explorer, since all of
 it is reached through the existing Supabase URL/keys.
 
-| Variable                         | Where it's used | Notes                                                                                                                                                          |
-| -------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`       | client + server | Project URL                                                                                                                                                    |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | client + server | Public anon key (RLS-restricted)                                                                                                                               |
-| `SUPABASE_SERVICE_ROLE_KEY`      | server only     | Bypasses RLS — used only by the validated `/api/submissions` route. Never expose to the browser.                                                               |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | client          | Optional in local dev. If unset, the widget doesn't render and the server skips Turnstile verification (dev-only fallback — see `TURNSTILE_SECRET_KEY` below). |
-| `TURNSTILE_SECRET_KEY`           | server only     | If set, the server _requires and verifies_ a Turnstile token on every submission. Leave unset locally to skip verification.                                    |
-| `ABUSE_HASH_SECRET`              | server only     | HMAC key used to derive a short-lived hash of the requester IP for rate-limiting. Raw IPs are never stored. Generate with `openssl rand -hex 32`.              |
-| `E2E_RATE_LIMIT_BYPASS`          | server only, e2e only | Set to `"1"` **only** by `playwright.config.ts`'s `webServer.env`. The `mobile` and `desktop` Playwright projects share one server process, so the real submission rate limit (5 per 10 minutes) is otherwise exceeded by the e2e suite itself. Guarded by the absence of `VERCEL` — never set this in a real deployment.  |
+| Variable                         | Where it's used       | Notes                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`       | client + server       | Project URL                                                                                                                                                                                                                                                                                                               |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | client + server       | Public anon key (RLS-restricted)                                                                                                                                                                                                                                                                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`      | server only           | Bypasses RLS — used only by the validated `/api/submissions` route. Never expose to the browser.                                                                                                                                                                                                                          |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | client                | Optional in local dev. If unset, the widget doesn't render and the server skips Turnstile verification (dev-only fallback — see `TURNSTILE_SECRET_KEY` below).                                                                                                                                                            |
+| `TURNSTILE_SECRET_KEY`           | server only           | If set, the server _requires and verifies_ a Turnstile token on every submission. Leave unset locally to skip verification.                                                                                                                                                                                               |
+| `ABUSE_HASH_SECRET`              | server only           | HMAC key used to derive a short-lived hash of the requester IP for rate-limiting. Raw IPs are never stored. Generate with `openssl rand -hex 32`.                                                                                                                                                                         |
+| `E2E_RATE_LIMIT_BYPASS`          | server only, e2e only | Set to `"1"` **only** by `playwright.config.ts`'s `webServer.env`. The `mobile` and `desktop` Playwright projects share one server process, so the real submission rate limit (5 per 10 minutes) is otherwise exceeded by the e2e suite itself. Guarded by the absence of `VERCEL` — never set this in a real deployment. |
 
 ## Saudi classification and the leaderboard
 
@@ -184,6 +192,28 @@ strictly additive on top of v1's fields, deterministically ordered/checksummed
 independently of v1, and never exposes internal moderation/admin fields. See
 `src/features/exports/projection.ts` for the versioning rationale; the v1 checksum is
 locked by a regression test (`src/features/exports/export.test.ts`).
+
+Pass `?schemaVersion=4` (the export UI's default/recommended option) for the
+**simplified clean-dictionary export**: the download body is a plain top-level JSON
+array (no `schema_version`/`records`/`checksum` envelope) of exactly `word`,
+`word_key`, `concept_id`, `meaning`, `msa_synonyms`, `dialects`, `local_dialects`,
+`examples`, `related_words`, `register`, in that order — never an id, approval
+status, reviewer, visibility, or other internal field. `dialects` uses the stable
+`hijazi | najdi | eastern | northern | southern` codes. A canonical entry with no
+valid (non-blank, deduplicated) example is excluded and reported in the export
+preview rather than silently emitted with an empty `examples` array. See
+`projectToExportV4`/`serializeJsonV4` in `src/features/exports/{projection,serializer}.ts`
+and the regression suite in `src/features/exports/export-v4.test.ts`.
+
+Pass `?format=allam` (or the "ALLaM Training JSONL" button next to the v4 export) for
+a separate, ALLaM-fine-tuning-compatible JSONL export — one `{"instruction",
+"response", "dialect"}` object per line, derived deterministically from the same v4
+clean records, using the `<DIALECT=HIJAZI|NAJDI|EASTERN|NORTHERN|SOUTHERN>` instruction
+tag. One usage row is generated per valid example; one meaning row is generated only
+when `meaning` is non-null (never fabricated from an MSA synonym). All rows from the
+same canonical entry are emitted consecutively, so a future train/dev/test split
+assigning whole groups can't leak the same word/sense across splits. See
+`generateAllamRows`/`serializeAllamJsonl` in `src/features/exports/serializer.ts`.
 
 ## Turnstile setup
 

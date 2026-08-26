@@ -6,6 +6,7 @@ import {
   type ExportRecordV1,
   type ExportRecordV2,
   type ExportRecordV3,
+  type ExportRecordV4,
 } from "./projection";
 
 /** Stable key order: explicit field list, not object spread/iteration order. */
@@ -166,4 +167,104 @@ export function serializeJsonV3(
 /** One complete per-word record per line — never the envelope. Same projection, same order as JSON. */
 export function serializeJsonlV3(records: ExportRecordV3[]): string {
   return records.map((r) => JSON.stringify(orderedRecordV3(r))).join("\n");
+}
+
+// --- Schema v4 (simplified clean-dictionary/training format) ------------
+//
+// The download body is a plain top-level array — no schema_version,
+// dataset, exported_at, record_count, or checksum wrapper. Exact key order,
+// exactly the documented keys, UTF-8 with no ASCII escaping.
+
+function orderedRecordV4(record: ExportRecordV4) {
+  return {
+    word: record.word,
+    word_key: record.word_key,
+    concept_id: record.concept_id,
+    meaning: record.meaning,
+    msa_synonyms: record.msa_synonyms,
+    dialects: record.dialects,
+    local_dialects: record.local_dialects,
+    examples: record.examples,
+    related_words: record.related_words,
+    register: record.register,
+  };
+}
+
+/** Checksum covers the same deterministic array the download body contains — kept internal (never in the download itself), for the admin UI/export log only. */
+export function computeChecksumV4(records: ExportRecordV4[]): string {
+  const canonical = JSON.stringify(records.map(orderedRecordV4));
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+/** Plain top-level array, 2-space indented, no envelope fields. */
+export function serializeJsonV4(records: ExportRecordV4[]): string {
+  return JSON.stringify(records.map(orderedRecordV4), null, 2);
+}
+
+export function serializeJsonlV4(records: ExportRecordV4[]): string {
+  return records.map((r) => JSON.stringify(orderedRecordV4(r))).join("\n");
+}
+
+// --- ALLaM-compatible training JSONL -------------------------------------
+
+export const ALLAM_DIALECT_TAG: Record<string, string> = {
+  hijazi: "HIJAZI",
+  najdi: "NAJDI",
+  eastern: "EASTERN",
+  northern: "NORTHERN",
+  southern: "SOUTHERN",
+};
+
+export interface AllamRow {
+  instruction: string;
+  response: string;
+  dialect: string;
+}
+
+/**
+ * Deterministic training rows from already-cleaned v4 records — never a
+ * fabricated meaning or a generated example. Grouped consecutively by
+ * canonical entry (all rows for one word/dialect appear together) so a
+ * future split step can assign a whole group to one split without
+ * cross-referencing anything else, preventing the same word/sense from
+ * leaking across train/dev/test.
+ */
+export function generateAllamRows(records: ExportRecordV4[]): AllamRow[] {
+  const rows: AllamRow[] = [];
+  for (const record of records) {
+    for (const code of record.dialects) {
+      const tag = ALLAM_DIALECT_TAG[code];
+      if (!tag) continue;
+      const dialectTagPrefix = `<DIALECT=${tag}>`;
+
+      for (const example of record.examples) {
+        rows.push({
+          instruction: `${dialectTagPrefix} استخدم كلمة «${record.word}» في جملة طبيعية.`,
+          response: example,
+          dialect: tag,
+        });
+      }
+
+      if (record.meaning) {
+        rows.push({
+          instruction: `${dialectTagPrefix} وش معنى كلمة «${record.word}»؟`,
+          response: record.meaning,
+          dialect: tag,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+export function serializeAllamJsonl(rows: AllamRow[]): string {
+  return rows
+    .map((r) =>
+      JSON.stringify({
+        instruction: r.instruction,
+        response: r.response,
+        dialect: r.dialect,
+      }),
+    )
+    .join("\n");
 }

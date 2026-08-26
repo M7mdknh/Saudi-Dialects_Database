@@ -3,38 +3,60 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   fetchApprovedEntries,
   getExportEligibilitySummary,
+  getExportV4ValidationSummary,
   logExport,
 } from "@/features/exports/export-service";
 import {
   EXPORT_SCHEMA_VERSION,
   EXPORT_SCHEMA_VERSION_V2,
   EXPORT_SCHEMA_VERSION_V3,
+  EXPORT_SCHEMA_VERSION_V4,
+  MAIN_GROUP_ORDER,
   projectToExportV1,
   projectToExportV2,
   projectToExportV3,
+  projectToExportV4,
 } from "@/features/exports/projection";
 import {
   computeChecksum,
   computeChecksumV2,
   computeChecksumV3,
+  computeChecksumV4,
+  generateAllamRows,
+  serializeAllamJsonl,
   serializeJson,
   serializeJsonl,
   serializeJsonlV2,
   serializeJsonlV3,
+  serializeJsonlV4,
   serializeJsonV2,
   serializeJsonV3,
+  serializeJsonV4,
 } from "@/features/exports/serializer";
+import type { MainDialectGroupCode } from "@/lib/supabase/types";
 
-const VALID_SCHEMA_VERSIONS = new Set(["1", "2", "3"]);
+const VALID_SCHEMA_VERSIONS = new Set(["1", "2", "3", "4"]);
 const VALID_VISIBILITY_FILTERS = new Set(["all", "public", "private"]);
+const VALID_MAIN_GROUP_CODES = new Set<string>(MAIN_GROUP_ORDER);
+
+function parseFormat(url: URL): "json" | "jsonl" | "allam" {
+  const raw = url.searchParams.get("format");
+  if (raw === "allam") return "allam";
+  if (raw === "jsonl") return "jsonl";
+  return "json";
+}
 
 export async function GET(request: Request) {
   await requireAdmin();
 
   const url = new URL(request.url);
-  const format = url.searchParams.get("format") === "jsonl" ? "jsonl" : "json";
+  const format = parseFormat(url);
   const preview = url.searchParams.get("preview") === "1";
   const dialectId = url.searchParams.get("dialectId") ?? undefined;
+  const mainGroupCodeParam = url.searchParams.get("mainGroupCode") ?? "";
+  if (mainGroupCodeParam && !VALID_MAIN_GROUP_CODES.has(mainGroupCodeParam)) {
+    return NextResponse.json({ code: "INVALID_MAIN_GROUP" }, { status: 400 });
+  }
   const updatedFrom = url.searchParams.get("updatedFrom") ?? undefined;
   const updatedTo = url.searchParams.get("updatedTo") ?? undefined;
   const visibilityParam = url.searchParams.get("visibility") ?? "all";
@@ -42,7 +64,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ code: "INVALID_VISIBILITY" }, { status: 400 });
   }
 
-  const schemaVersionParam = url.searchParams.get("schemaVersion") ?? "1";
+  // ALLaM training rows are always derived from the v4 clean projection,
+  // regardless of what schemaVersion the caller passed.
+  const schemaVersionParam =
+    format === "allam" ? "4" : (url.searchParams.get("schemaVersion") ?? "1");
   if (!VALID_SCHEMA_VERSIONS.has(schemaVersionParam)) {
     return NextResponse.json(
       { code: "INVALID_SCHEMA_VERSION" },
@@ -50,8 +75,15 @@ export async function GET(request: Request) {
     );
   }
 
+  // `mainGroupCode` is intentionally undefined (not "all"/empty-string) when
+  // absent, so "all dialects" never silently reuses a value left over from a
+  // previous request — each request's filters are built fresh from its own
+  // query string only. See export.test.ts's stale-filter regression.
   const filters = {
     dialectId,
+    mainGroupCode: mainGroupCodeParam
+      ? (mainGroupCodeParam as MainDialectGroupCode)
+      : undefined,
     updatedFrom,
     updatedTo,
     visibility: visibilityParam as "all" | "public" | "private",
@@ -59,6 +91,18 @@ export async function GET(request: Request) {
 
   if (preview) {
     try {
+      if (schemaVersionParam === "4") {
+        const summary = await getExportV4ValidationSummary(filters);
+        return NextResponse.json({
+          recordCount: summary.recordCount,
+          schemaVersion: 4,
+          countsByMainDialect: summary.countsByMainDialect,
+          missingMeaningCount: summary.missingMeaningCount,
+          missingSynonymCount: summary.missingSynonymCount,
+          excludedInvalidExampleCount: summary.excludedInvalidExampleCount,
+          excludedEntries: summary.excludedEntries,
+        });
+      }
       const summary = await getExportEligibilitySummary(filters);
       return NextResponse.json({
         recordCount: summary.eligibleCount,
@@ -95,9 +139,30 @@ export async function GET(request: Request) {
   let schemaVersion: number;
   let checksum: string;
   let body: string;
+  let logFormat: "json" | "jsonl" | "allam-jsonl" =
+    format === "allam" ? "allam-jsonl" : format;
+  let filename = `lahajat-export.${format}`;
 
   try {
-    if (schemaVersionParam === "3") {
+    if (format === "allam") {
+      const { records } = projectToExportV4(entries);
+      const rows = generateAllamRows(records);
+      recordCount = rows.length;
+      schemaVersion = EXPORT_SCHEMA_VERSION_V4;
+      body = serializeAllamJsonl(rows);
+      checksum = computeChecksumV4(records);
+      logFormat = "allam-jsonl";
+      filename = "lahajat-allam-training.jsonl";
+    } else if (schemaVersionParam === "4") {
+      const { records } = projectToExportV4(entries);
+      recordCount = records.length;
+      schemaVersion = EXPORT_SCHEMA_VERSION_V4;
+      checksum = computeChecksumV4(records);
+      body =
+        format === "jsonl"
+          ? serializeJsonlV4(records)
+          : serializeJsonV4(records);
+    } else if (schemaVersionParam === "3") {
       const records = projectToExportV3(entries);
       recordCount = records.length;
       schemaVersion = EXPORT_SCHEMA_VERSION_V3;
@@ -133,7 +198,7 @@ export async function GET(request: Request) {
   }
 
   await logExport({
-    format,
+    format: logFormat,
     schemaVersion,
     filters,
     recordCount,
@@ -143,10 +208,10 @@ export async function GET(request: Request) {
   return new NextResponse(body, {
     headers: {
       "Content-Type":
-        format === "jsonl"
-          ? "application/x-ndjson; charset=utf-8"
-          : "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="lahajat-export.${format}"`,
+        format === "json"
+          ? "application/json; charset=utf-8"
+          : "application/x-ndjson; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }

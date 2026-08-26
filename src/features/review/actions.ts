@@ -725,14 +725,12 @@ export async function createDialect(
   const admin = await requireAdmin();
   const supabase = await createSupabaseServerClient();
   const slug = toSearchKey(nameAr).replace(/\s+/g, "-");
-  const { data, error } = await supabase
-    .rpc("create_dialect", {
-      p_actor: admin.userId,
-      p_name_ar: nameAr,
-      p_slug: slug,
-      p_parent_id: parentId,
-    })
-    .single();
+  const { data, error } = await supabase.rpc("create_dialect", {
+    p_actor: admin.userId,
+    p_name_ar: nameAr,
+    p_slug: slug,
+    p_parent_id: parentId,
+  });
   if (error) throw error;
   return data;
 }

@@ -15,6 +15,17 @@
 export const EXPORT_SCHEMA_VERSION = 1;
 export const EXPORT_SCHEMA_VERSION_V2 = 2;
 export const EXPORT_SCHEMA_VERSION_V3 = 3;
+export const EXPORT_SCHEMA_VERSION_V4 = 4;
+
+export const ALLOWED_REGISTERS = [
+  "neutral",
+  "informal",
+  "slang",
+  "offensive",
+  "taboo",
+  "archaic",
+] as const;
+export type Register = (typeof ALLOWED_REGISTERS)[number];
 
 export const MAIN_GROUP_ORDER = [
   "hijazi",
@@ -35,6 +46,7 @@ export const MAIN_GROUP_LABELS_AR: Record<string, string> = {
 export interface CanonicalEntryForExport {
   id: string;
   canonical_word: string;
+  canonical_word_search_key: string;
   canonical_dialect_name: string;
   canonical_msa_synonyms: string[];
   canonical_explanation: string | null;
@@ -51,6 +63,12 @@ export interface CanonicalEntryForExport {
     msa_lemma: string;
   } | null;
   source_count?: number;
+  concept_id?: string | null;
+  register?: string | null;
+  related_words?: string[];
+  /** v4 only: the full multi-dialect set (a word can belong to more than one main group and/or local dialect via the dictionary editor). Falls back to `main_group_code`/`local_labels` when absent or empty. */
+  main_group_codes?: string[];
+  local_dialect_labels?: string[];
 }
 
 export interface ExportRecordV1 {
@@ -256,4 +274,123 @@ export function projectToExportV3(
       reviewed_at: entry.approved_at,
     },
   }));
+}
+
+// --- Schema v4: simplified clean-dictionary/training format -------------
+//
+// A plain top-level array (no envelope) of exactly the documented keys, in
+// the documented order. Never invents meaning, concept links, or register —
+// each is `null`/`[]` unless an admin has already recorded real data.
+
+export interface ExportRecordV4 {
+  word: string;
+  word_key: string;
+  concept_id: string | null;
+  meaning: string | null;
+  msa_synonyms: string[];
+  dialects: string[];
+  local_dialects: string[];
+  examples: string[];
+  related_words: string[];
+  register: string | null;
+}
+
+export interface ExportV4Exclusion {
+  id: string;
+  word: string;
+  reason: "no_valid_examples";
+}
+
+export interface ExportV4Result {
+  records: ExportRecordV4[];
+  excluded: ExportV4Exclusion[];
+}
+
+/** Trim, drop blanks, and deduplicate while preserving first-occurrence order. */
+function cleanStringList(values: string[] | undefined | null): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values ?? []) {
+    const value = raw.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function isValidRegister(value: string | null | undefined): value is Register {
+  return !!value && (ALLOWED_REGISTERS as readonly string[]).includes(value);
+}
+
+/** Deterministic v4 ordering: word_key, then dialects, then stable id. */
+function sortForExportV4(
+  entries: CanonicalEntryForExport[],
+): CanonicalEntryForExport[] {
+  return [...entries].sort((a, b) => {
+    const byKey = a.canonical_word_search_key.localeCompare(
+      b.canonical_word_search_key,
+    );
+    if (byKey !== 0) return byKey;
+    const byDialect = (a.main_group_code ?? "").localeCompare(
+      b.main_group_code ?? "",
+    );
+    if (byDialect !== 0) return byDialect;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
+ * Pure v4 projection. Filters out any entry with no valid (non-blank,
+ * deduplicated) example — such entries are reported in `excluded` rather
+ * than silently included with an empty examples array, per the product
+ * rule that a training record needs at least one real example.
+ */
+export function projectToExportV4(
+  entries: CanonicalEntryForExport[],
+): ExportV4Result {
+  const sorted = sortForExportV4(entries);
+  const records: ExportRecordV4[] = [];
+  const excluded: ExportV4Exclusion[] = [];
+
+  for (const entry of sorted) {
+    const examples = cleanStringList(entry.examples.map((e) => e.sentence));
+    if (examples.length === 0) {
+      excluded.push({
+        id: entry.id,
+        word: entry.canonical_word,
+        reason: "no_valid_examples",
+      });
+      continue;
+    }
+
+    const meaning = entry.canonical_explanation?.trim() || null;
+    const conceptId =
+      entry.concept_id?.trim() || entry.reference_concept?.id || null;
+
+    records.push({
+      word: entry.canonical_word,
+      word_key: entry.canonical_word_search_key,
+      concept_id: conceptId,
+      meaning,
+      msa_synonyms: cleanStringList(entry.canonical_msa_synonyms),
+      dialects:
+        entry.main_group_codes && entry.main_group_codes.length > 0
+          ? cleanStringList(entry.main_group_codes)
+          : entry.main_group_code
+            ? [entry.main_group_code]
+            : [],
+      local_dialects:
+        entry.local_dialect_labels && entry.local_dialect_labels.length > 0
+          ? cleanStringList(entry.local_dialect_labels)
+          : cleanStringList(entry.local_labels),
+      examples,
+      related_words: cleanStringList(entry.related_words).filter(
+        (w) => w !== entry.canonical_word,
+      ),
+      register: isValidRegister(entry.register) ? entry.register : null,
+    });
+  }
+
+  return { records, excluded };
 }

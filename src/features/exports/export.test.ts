@@ -26,6 +26,7 @@ function entry(
   return {
     id: "b0000000-0000-0000-0000-000000000001",
     canonical_word: "سبهللة",
+    canonical_word_search_key: "سبهللة",
     canonical_dialect_name: "حجازي",
     canonical_msa_synonyms: ["بلا هدف"],
     canonical_explanation: "يُقال عندما يمشي أحدهم بلا وجهة",

@@ -12,7 +12,7 @@ export type EditorialStatus = "draft" | "approved" | "retired";
 
 export type SourceRelation = "primary" | "merged" | "supporting";
 
-export type ExportFormat = "json" | "jsonl";
+export type ExportFormat = "json" | "jsonl" | "allam-jsonl";
 
 export type MainDialectGroupCode =
   "hijazi" | "najdi" | "eastern" | "northern" | "southern";
@@ -21,6 +21,11 @@ export type ParticipationExclusionReason =
   "spam" | "abuse" | "test" | "duplicate" | "invalid_submission";
 
 export type PublicVisibility = "public" | "private";
+
+export type DuplicateCandidateType = "exact" | "conflict" | "fuzzy";
+
+export type DuplicateGroupStatus =
+  "unresolved" | "not_duplicate" | "ignored" | "merged";
 
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -101,6 +106,9 @@ export interface Database {
         approved_by: string | null;
         approved_at: string | null;
         reference_prompt_id: string | null;
+        concept_id: string | null;
+        register: string | null;
+        related_words: string[];
         created_at: string;
         updated_at: string;
       }>;
@@ -170,6 +178,20 @@ export interface Database {
         status: string;
         created_at: string;
         completed_at: string | null;
+      }>;
+      duplicate_group_resolutions: Table<{
+        group_key: string;
+        status: DuplicateGroupStatus;
+        member_signature: string | null;
+        canonical_entry_id: string | null;
+        resolved_by: string | null;
+        resolved_at: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      canonical_entry_dialects: Table<{
+        canonical_entry_id: string;
+        dialect_id: string;
       }>;
     };
     Views: Record<string, never>;
@@ -366,6 +388,186 @@ export interface Database {
           p_checksum: string;
         };
         Returns: Database["public"]["Tables"]["exports"]["Row"];
+      };
+      duplicate_group_candidates: {
+        Args: {
+          p_search: string | null;
+          p_candidate_type: string | null;
+          p_main_group_code: string | null;
+          p_local_dialect_label: string | null;
+          p_min_candidates: number | null;
+          p_resolution_status: string | null;
+          p_sort: string | null;
+          p_limit: number;
+          p_offset: number;
+        };
+        Returns: {
+          group_key: string;
+          candidate_type: DuplicateCandidateType;
+          word: string;
+          word_search_key: string;
+          candidate_count: number;
+          main_group_codes: MainDialectGroupCode[] | null;
+          local_dialect_labels: string[] | null;
+          meanings: string[] | null;
+          example_count: number;
+          has_canonical: boolean;
+          canonical_entry_id: string | null;
+          canonical_status: string | null;
+          public_visibility: PublicVisibility | null;
+          resolution_status: DuplicateGroupStatus;
+          newest_candidate_at: string;
+          match_strength: number;
+          total_count: number;
+          member_ids: string[];
+        }[];
+      };
+      duplicate_group_summary: {
+        Args: Record<string, never>;
+        Returns: {
+          unresolved_groups: number;
+          exact_match_groups: number;
+          possible_match_groups: number;
+          total_source_records: number;
+        }[];
+      };
+      duplicate_group_members: {
+        Args: { p_group_key: string };
+        Returns: {
+          member_type: "raw" | "canonical";
+          member_id: string;
+          word: string;
+          main_group_code: MainDialectGroupCode | null;
+          local_dialect_label: string | null;
+          meaning: string | null;
+          msa_synonym: string | null;
+          examples: { id: string; sentence: string }[];
+          related_words: string[] | null;
+          concept_id: string | null;
+          register: string | null;
+          public_visibility: PublicVisibility | null;
+          reference_prompt_id: string | null;
+          version: number | null;
+        }[];
+      };
+      resolve_duplicate_group: {
+        Args: {
+          p_actor: string;
+          p_group_key: string;
+          p_status: string;
+          p_member_signature: string;
+        };
+        Returns: undefined;
+      };
+      reopen_duplicate_group: {
+        Args: { p_actor: string; p_group_key: string };
+        Returns: undefined;
+      };
+      merge_duplicate_group: {
+        Args: {
+          p_actor: string;
+          p_group_key: string;
+          p_member_signature: string;
+          p_raw_submission_ids: string[];
+          p_target_entry_id: string | null;
+          p_expected_version: number | null;
+          p_canonical_word: string;
+          p_canonical_word_search_key: string;
+          p_canonical_dialect_id: string;
+          p_canonical_msa_synonyms: string[];
+          p_canonical_explanation: string;
+          p_examples: unknown;
+          p_removed_canonical_example_ids?: string[];
+          p_related_words?: string[];
+          p_concept_id?: string | null;
+          p_register?: string | null;
+          p_visibility?: string;
+          p_reference_prompt_id?: string | null;
+        };
+        Returns: string;
+      };
+      update_canonical_entry_full: {
+        Args: {
+          p_actor: string;
+          p_entry_id: string;
+          p_expected_version: number | null;
+          p_canonical_word: string;
+          p_canonical_word_search_key: string;
+          p_canonical_explanation: string;
+          p_canonical_msa_synonyms: string[];
+          p_dialect_ids: string[];
+          p_examples: unknown;
+          p_related_words: string[];
+          p_concept_id: string | null;
+          p_register: string | null;
+          p_visibility: string | null;
+        };
+        Returns: { id: string; version: number; stale: boolean }[];
+      };
+      undo_canonical_entry_edit: {
+        Args: {
+          p_actor: string;
+          p_event_id: string;
+          p_expected_version: number | null;
+        };
+        Returns: { id: string; version: number; stale: boolean }[];
+      };
+      dictionary_entries_list: {
+        Args: {
+          p_search: string | null;
+          p_main_group_code: string | null;
+          p_local_dialect_label: string | null;
+          p_visibility: string | null;
+          p_register: string | null;
+          p_missing_meaning: boolean | null;
+          p_missing_examples: boolean | null;
+          p_missing_concept: boolean | null;
+          p_sort: string | null;
+          p_limit: number;
+          p_offset: number;
+        };
+        Returns: {
+          id: string;
+          canonical_word: string;
+          canonical_word_search_key: string;
+          concept_id: string | null;
+          canonical_explanation: string | null;
+          canonical_msa_synonyms: string[];
+          register: string | null;
+          public_visibility: PublicVisibility;
+          main_group_codes: MainDialectGroupCode[];
+          local_dialect_labels: string[];
+          example_count: number;
+          related_words: string[];
+          updated_at: string;
+          version: number;
+          total_count: number;
+        }[];
+      };
+      dictionary_entry_detail: {
+        Args: { p_entry_id: string };
+        Returns: {
+          id: string;
+          canonical_word: string;
+          canonical_word_search_key: string;
+          concept_id: string | null;
+          canonical_explanation: string | null;
+          canonical_msa_synonyms: string[];
+          register: string | null;
+          public_visibility: PublicVisibility;
+          related_words: string[];
+          version: number;
+          dialect_ids: string[];
+          examples: { id: string; sentence: string; position: number }[];
+        }[];
+      };
+      bulk_set_dictionary_visibility: {
+        Args: { p_actor: string; p_entry_ids: string[]; p_visibility: string };
+        Returns: number;
+      };
+      bulk_add_dictionary_dialect: {
+        Args: { p_actor: string; p_entry_ids: string[]; p_dialect_id: string };
+        Returns: number;
       };
       list_active_reference_prompts: {
         Args: Record<string, never>;
