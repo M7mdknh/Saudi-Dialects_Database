@@ -315,9 +315,8 @@ export function DuplicateMergeWorkspace({
     [members],
   );
   const [showSplit, setShowSplit] = useState(false);
-  const [splitBuckets, setSplitBuckets] = useState<SplitBucket[]>(
-    defaultSplitBuckets,
-  );
+  const [splitBuckets, setSplitBuckets] =
+    useState<SplitBucket[]>(defaultSplitBuckets);
   const [sharedConceptId, setSharedConceptId] = useState("");
   const [splitStatus, setSplitStatus] = useState<
     "idle" | "saving" | "error" | "done"
@@ -913,7 +912,11 @@ export function DuplicateMergeWorkspace({
             <h2 className="text-foreground/70 text-sm font-bold">
               فصل إلى كلمات مستقلة
             </h2>
-            <Button type="button" variant="ghost" onClick={() => setShowSplit(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowSplit(false)}
+            >
               إغلاق
             </Button>
           </div>
@@ -952,10 +955,7 @@ export function DuplicateMergeWorkspace({
                     className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
                   />
                 </Field>
-                <Field
-                  id={`dup-split-explanation-${index}`}
-                  label="المعنى"
-                >
+                <Field id={`dup-split-explanation-${index}`} label="المعنى">
                   <textarea
                     id={`dup-split-explanation-${index}`}
                     value={bucket.explanation}
@@ -1020,9 +1020,7 @@ export function DuplicateMergeWorkspace({
 
           <Button
             type="button"
-            disabled={
-              pending || hasDuplicateSplitKeys || hasEmptySplitDialects
-            }
+            disabled={pending || hasDuplicateSplitKeys || hasEmptySplitDialects}
             onClick={handleSplit}
           >
             {pending && splitStatus === "saving"

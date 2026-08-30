@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { buildDefaultSplitBuckets } from "./split-groups";
 import type { DuplicateGroupMember } from "./actions";
 
-function member(overrides: Partial<DuplicateGroupMember>): DuplicateGroupMember {
+function member(
+  overrides: Partial<DuplicateGroupMember>,
+): DuplicateGroupMember {
   return {
     memberType: "raw",
     memberId: "m1",
@@ -89,9 +91,6 @@ describe("buildDefaultSplitBuckets — جب vs جيب regression", () => {
     expect(sameSpelling[0].dialectIds.sort()).toEqual(
       [najdiDialectId, hijaziDialectId].sort(),
     );
-    expect(sameSpelling[0].rawSubmissionIds.sort()).toEqual([
-      "raw-1",
-      "raw-2",
-    ]);
+    expect(sameSpelling[0].rawSubmissionIds.sort()).toEqual(["raw-1", "raw-2"]);
   });
 });

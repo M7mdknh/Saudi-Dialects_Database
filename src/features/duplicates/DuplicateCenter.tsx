@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
+  bulkAutoMergeDuplicateGroups,
+  getAutoMergeableDuplicateCount,
   listDuplicateGroups,
   resolveDuplicateGroup,
   type DuplicateGroupRow,
@@ -33,14 +35,26 @@ export function DuplicateCenter({
   initialRows,
   initialTotal,
   initialSummary,
+  initialAutoMergeableCount,
 }: {
   initialRows: DuplicateGroupRow[];
   initialTotal: number;
   initialSummary: Summary;
+  initialAutoMergeableCount: number;
 }) {
   const [rows, setRows] = useState(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [summary, setSummary] = useState(initialSummary);
+  const [autoMergeableCount, setAutoMergeableCount] = useState(
+    initialAutoMergeableCount,
+  );
+  const [autoMergeStatus, setAutoMergeStatus] = useState<
+    "idle" | "confirming" | "running" | "done" | "error"
+  >("idle");
+  const [autoMergeSummary, setAutoMergeSummary] = useState<{
+    merged: number;
+    skipped: number;
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [candidateType, setCandidateType] = useState<
@@ -94,6 +108,32 @@ export function DuplicateCenter({
     }
   }
 
+  function handleAutoMergeClick() {
+    setAutoMergeStatus("confirming");
+  }
+
+  function confirmAutoMerge() {
+    setAutoMergeStatus("running");
+    startTransition(async () => {
+      try {
+        const results = await bulkAutoMergeDuplicateGroups();
+        const merged = results.filter((r) => r.merged).length;
+        const skipped = results.length - merged;
+        setAutoMergeSummary({ merged, skipped });
+        setAutoMergeStatus("done");
+        refetch(1);
+        await refreshSummary();
+        try {
+          setAutoMergeableCount(await getAutoMergeableDuplicateCount());
+        } catch {
+          // non-fatal — the batch result summary already reflects what happened
+        }
+      } catch {
+        setAutoMergeStatus("error");
+      }
+    });
+  }
+
   function handleQuickResolve(
     row: DuplicateGroupRow,
     newStatus: "not_duplicate" | "ignored",
@@ -135,6 +175,59 @@ export function DuplicateCenter({
           label="سجلات مصدر متضمّنة"
           value={summary.totalSourceRecords}
         />
+      </div>
+
+      <div
+        className="border-border bg-surface flex flex-col gap-2 rounded-2xl border p-4"
+        data-testid="auto-merge-panel"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm">
+            الحالات الواضحة المؤهلة للدمج التلقائي حاليًا:{" "}
+            <span className="font-bold">{autoMergeableCount}</span>
+          </p>
+          {autoMergeStatus === "idle" || autoMergeStatus === "error" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={autoMergeableCount === 0}
+              onClick={handleAutoMergeClick}
+            >
+              دمج الحالات الواضحة تلقائيًا
+            </Button>
+          ) : null}
+        </div>
+        {autoMergeStatus === "confirming" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm">
+              سيتم دمج {autoMergeableCount} مجموعة تلقائيًا. المجموعات ذات تعارض
+              في المعنى أو المفهوم تبقى في قائمة المراجعة اليدوية. متابعة؟
+            </p>
+            <Button type="button" disabled={pending} onClick={confirmAutoMerge}>
+              {pending ? "جارٍ الدمج…" : "تأكيد"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setAutoMergeStatus("idle")}
+            >
+              إلغاء
+            </Button>
+          </div>
+        ) : null}
+        {autoMergeStatus === "done" && autoMergeSummary ? (
+          <p className="text-sm">
+            تم دمج {autoMergeSummary.merged} مجموعة تلقائيًا
+            {autoMergeSummary.skipped > 0
+              ? ` (تم تجاوز ${autoMergeSummary.skipped} لعدم توفر الأهلية).`
+              : "."}
+          </p>
+        ) : null}
+        {autoMergeStatus === "error" ? (
+          <p role="alert" className="text-danger text-sm">
+            تعذّر تنفيذ الدمج التلقائي. حاول مرة أخرى.
+          </p>
+        ) : null}
       </div>
 
       <form
@@ -274,6 +367,11 @@ export function DuplicateCenter({
                 <span className="text-foreground/60 text-xs">
                   {row.candidateCount} مرشّحين
                 </span>
+                {row.autoMergeable ? (
+                  <span className="bg-accent/10 text-accent rounded-full px-2 py-0.5 text-xs font-semibold">
+                    قابلة للدمج التلقائي
+                  </span>
+                ) : null}
               </div>
               <span className="text-foreground/60 text-xs">
                 {RESOLUTION_STATUS_LABELS_AR[row.resolutionStatus]}

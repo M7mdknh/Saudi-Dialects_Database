@@ -420,6 +420,24 @@ export interface Database {
           match_strength: number;
           total_count: number;
           member_ids: string[];
+          auto_mergeable: boolean;
+        }[];
+      };
+      count_auto_mergeable_duplicate_groups: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      auto_merge_duplicate_group: {
+        Args: { p_actor: string; p_group_key: string };
+        Returns: { entry_id: string | null; merged: boolean; reason: string }[];
+      };
+      bulk_auto_merge_duplicate_groups: {
+        Args: { p_actor: string };
+        Returns: {
+          group_key: string;
+          entry_id: string | null;
+          merged: boolean;
+          reason: string;
         }[];
       };
       duplicate_group_summary: {

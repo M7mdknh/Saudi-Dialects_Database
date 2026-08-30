@@ -31,6 +31,7 @@ export interface DuplicateGroupRow {
   newestCandidateAt: string;
   matchStrength: number;
   memberSignature: string;
+  autoMergeable: boolean;
 }
 
 export interface ListDuplicateGroupsParams {
@@ -94,6 +95,7 @@ export async function listDuplicateGroups(params: ListDuplicateGroupsParams) {
     newestCandidateAt: row.newest_candidate_at,
     matchStrength: row.match_strength,
     memberSignature: memberSignatureFromIds(row.member_ids ?? []),
+    autoMergeable: row.auto_mergeable,
   }));
 
   return {
@@ -149,6 +151,7 @@ export async function getDuplicateGroupRow(
     newestCandidateAt: row.newest_candidate_at,
     matchStrength: row.match_strength,
     memberSignature: memberSignatureFromIds(row.member_ids ?? []),
+    autoMergeable: row.auto_mergeable,
   };
 }
 
@@ -165,6 +168,48 @@ export async function getDuplicateSummary() {
     possibleMatchGroups: data.possible_match_groups,
     totalSourceRecords: data.total_source_records,
   };
+}
+
+/** Preview count for the "دمج الحالات الواضحة تلقائيًا" batch action — read-only. */
+export async function getAutoMergeableDuplicateCount(): Promise<number> {
+  await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "count_auto_mergeable_duplicate_groups",
+  );
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export interface AutoMergeResult {
+  groupKey: string;
+  entryId: string | null;
+  merged: boolean;
+  reason: string;
+}
+
+/**
+ * "دمج الحالات الواضحة تلقائيًا": automatically merges every currently
+ * unresolved exact-word_key group that passes the meaning/concept rule.
+ * Groups with a meaning or concept conflict (or any other ineligibility)
+ * are left untouched in the manual queue.
+ */
+export async function bulkAutoMergeDuplicateGroups(): Promise<
+  AutoMergeResult[]
+> {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "bulk_auto_merge_duplicate_groups",
+    { p_actor: admin.userId },
+  );
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    groupKey: row.group_key,
+    entryId: row.entry_id,
+    merged: row.merged,
+    reason: row.reason,
+  }));
 }
 
 export interface DuplicateGroupMember {

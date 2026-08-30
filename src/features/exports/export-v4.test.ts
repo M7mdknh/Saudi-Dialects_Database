@@ -486,6 +486,67 @@ describe("projectToExportV4 — split words regression: جب vs جيب", () => {
   });
 });
 
+describe("projectToExportV4 — automatic exact-word merge result", () => {
+  // Regression for automatic merging of clear exact-word_key duplicates:
+  // "same word across multiple dialects -> one entry with all dialects",
+  // with every unique example retained and exact duplicates removed.
+  const merged = entry({
+    id: "c0000000-0000-0000-0000-000000000001",
+    canonical_word: "طنشني",
+    canonical_word_search_key: "طنشني",
+    main_group_code: "najdi",
+    main_group_codes: ["najdi", "southern"],
+    local_labels: [],
+    local_dialect_labels: [],
+    canonical_msa_synonyms: ["تجاهلني"],
+    canonical_explanation: "تجاهلني عمدًا",
+    related_words: [],
+    concept_id: null,
+    examples: [
+      { id: "e1", sentence: "طنشني وما رد علي" },
+      { id: "e2", sentence: "طنشني وما رد علي" }, // exact duplicate after trim
+      { id: "e3", sentence: "  طنشني وما رد علي  " }, // duplicate after trim
+      { id: "e4", sentence: "كل ما أكلمه يطنشني" },
+    ],
+  });
+
+  const { records } = projectToExportV4([merged]);
+
+  it("appears exactly once in the export", () => {
+    expect(records).toHaveLength(1);
+  });
+
+  it("carries every applicable dialect from the automatic merge", () => {
+    expect(records[0].dialects).toEqual(["najdi", "southern"]);
+  });
+
+  it("retains every unique example and removes only exact duplicates", () => {
+    expect(records[0].examples).toEqual([
+      "طنشني وما رد علي",
+      "كل ما أكلمه يطنشني",
+    ]);
+  });
+
+  it("preserves the single available meaning", () => {
+    expect(records[0].meaning).toBe("تجاهلني عمدًا");
+  });
+
+  it("produces the correct ALLaM rows for every retained example and every merged-in dialect", () => {
+    const rows = generateAllamRows(records);
+    // 2 unique examples + 1 meaning row, once per applicable dialect (najdi, southern).
+    expect(rows).toHaveLength(6);
+    const tagsSeen = new Set(rows.map((r) => r.dialect));
+    expect(tagsSeen).toEqual(new Set(["NAJDI", "SOUTHERN"]));
+    expect(rows.filter((r) => r.response === "طنشني وما رد علي")).toHaveLength(
+      2,
+    );
+    expect(
+      rows.filter((r) => r.response === "كل ما أكلمه يطنشني"),
+    ).toHaveLength(2);
+    expect(rows.filter((r) => r.response === "تجاهلني عمدًا")).toHaveLength(2);
+  });
+});
+
 describe("ALLaM training JSONL", () => {
   it("maps all five dialect codes to their training tags", () => {
     expect(ALLAM_DIALECT_TAG).toEqual({
