@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accumulateAutoMergeProgress,
   dedupeExamplesByKey,
   distinctNormalizedMeanings,
   evaluateAutoMergeEligibility,
@@ -7,6 +8,7 @@ import {
   normalizeMeaningText,
   pickAutoMergePrimaryDialect,
   resolveAutoMergeMeaning,
+  shouldRequestNextAutoMergeBatch,
   unionPreservingOrder,
 } from "./auto-merge-rules";
 
@@ -230,5 +232,84 @@ describe("dedupeExamplesByKey — examples merge result", () => {
     ]);
     expect(a).toEqual(b);
     expect(a.map((e) => e.sentence)).toEqual(["أ", "ب"]);
+  });
+});
+
+describe("accumulateAutoMergeProgress — bounded-batch progress accounting", () => {
+  const start = {
+    total: 791,
+    merged: 0,
+    skipped: 0,
+    failed: 0,
+    remaining: 791,
+  };
+
+  it("sums merged/skipped/failed across batches and keeps the latest remaining count", () => {
+    const afterBatch1 = accumulateAutoMergeProgress(start, {
+      merged: 20,
+      skipped: 3,
+      failed: 2,
+      remaining: 766,
+      attempted: 25,
+    });
+    expect(afterBatch1).toEqual({
+      total: 791,
+      merged: 20,
+      skipped: 3,
+      failed: 2,
+      remaining: 766,
+    });
+
+    const afterBatch2 = accumulateAutoMergeProgress(afterBatch1, {
+      merged: 24,
+      skipped: 1,
+      failed: 0,
+      remaining: 741,
+      attempted: 25,
+    });
+    expect(afterBatch2).toEqual({
+      total: 791,
+      merged: 44,
+      skipped: 4,
+      failed: 2,
+      remaining: 741,
+    });
+  });
+
+  it("never sums `remaining` across batches — always the fresh count", () => {
+    const result = accumulateAutoMergeProgress(start, {
+      merged: 791,
+      skipped: 0,
+      failed: 0,
+      remaining: 0,
+      attempted: 791,
+    });
+    expect(result.remaining).toBe(0);
+  });
+});
+
+describe("shouldRequestNextAutoMergeBatch — no infinite loop around failed groups", () => {
+  it("continues while a batch actually claimed and attempted groups", () => {
+    expect(
+      shouldRequestNextAutoMergeBatch({
+        merged: 25,
+        skipped: 0,
+        failed: 0,
+        remaining: 766,
+        attempted: 25,
+      }),
+    ).toBe(true);
+  });
+
+  it("stops once a batch attempts nothing — an empty backlog or every remaining group excluded by its failure ceiling", () => {
+    expect(
+      shouldRequestNextAutoMergeBatch({
+        merged: 0,
+        skipped: 0,
+        failed: 0,
+        remaining: 1,
+        attempted: 0,
+      }),
+    ).toBe(false);
   });
 });

@@ -17,6 +17,18 @@
 import { MAIN_GROUP_ORDER } from "./dialect-selection";
 import type { MainDialectGroupCode } from "@/lib/supabase/types";
 
+/**
+ * Bounded batch size for one automatic-merge round-trip. Deliberately kept
+ * far below any platform timeout — a production incident (791 eligible
+ * groups) confirmed that processing an unbounded backlog inside a single
+ * request/transaction (the old bulk_auto_merge_duplicate_groups RPC)
+ * reliably exceeds statement/connection/function timeouts before it can
+ * finish, and — since it was one open transaction — commits nothing at
+ * all when that happens. See migration 0032. Kept out of actions.ts: a
+ * "use server" file may only export async functions, never a plain const.
+ */
+export const AUTO_MERGE_BATCH_SIZE = 25;
+
 /** Trim, collapse repeated whitespace, and treat a blank result as absent. */
 export function normalizeMeaningText(
   text: string | null | undefined,
@@ -226,4 +238,57 @@ export function dedupeExamplesByKey(examples: ExampleInput[]): ExampleInput[] {
     out.push({ ...e, sentence });
   }
   return out;
+}
+
+// --- Bounded-batch progress orchestration --------------------------------
+//
+// The admin UI processes the automatic-merge backlog as a sequence of
+// bounded server round trips (see runAutoMergeBatch in actions.ts) rather
+// than one unbounded request — the production incident this replaced was
+// exactly one request trying to process 791 groups in a single transaction
+// and exceeding every timeout layer before anything could commit. These
+// pure helpers drive the client-side progress loop without embedding any
+// of that decision logic inside the React component itself.
+
+export interface AutoMergeProgress {
+  total: number;
+  merged: number;
+  skipped: number;
+  failed: number;
+  remaining: number;
+}
+
+export interface AutoMergeBatchLike {
+  merged: number;
+  skipped: number;
+  failed: number;
+  remaining: number;
+  attempted: number;
+}
+
+/** Folds one more batch's result into the running progress total. `remaining` always reflects the latest batch's fresh count, never summed. */
+export function accumulateAutoMergeProgress(
+  prev: AutoMergeProgress,
+  batch: AutoMergeBatchLike,
+): AutoMergeProgress {
+  return {
+    total: prev.total,
+    merged: prev.merged + batch.merged,
+    skipped: prev.skipped + batch.skipped,
+    failed: prev.failed + batch.failed,
+    remaining: batch.remaining,
+  };
+}
+
+/**
+ * A run keeps requesting batches only while the previous one actually
+ * claimed something. `attempted: 0` means nothing was left to claim —
+ * either the backlog is empty or every remaining group is excluded (e.g.
+ * a permanently-failing group past its retry ceiling) — so continuing
+ * would spin forever without making progress.
+ */
+export function shouldRequestNextAutoMergeBatch(
+  batch: AutoMergeBatchLike,
+): boolean {
+  return batch.attempted > 0;
 }

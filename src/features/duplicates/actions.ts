@@ -1,9 +1,10 @@
 "use server";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { toSearchKey } from "@/lib/text/normalize-arabic";
+import { AUTO_MERGE_BATCH_SIZE } from "./auto-merge-rules";
 import type {
   DuplicateCandidateType,
   DuplicateGroupStatus,
@@ -181,35 +182,174 @@ export async function getAutoMergeableDuplicateCount(): Promise<number> {
   return data ?? 0;
 }
 
-export interface AutoMergeResult {
+export interface AutoMergeGroupOutcome {
   groupKey: string;
   entryId: string | null;
   merged: boolean;
+  /** e.g. 'merged' | 'already_up_to_date' | 'conflict' | 'not_exact' | 'multiple_canonical_entries' | 'insufficient_sources' | 'already_resolved' | 'dialect_required' | 'error' */
   reason: string;
 }
 
+export interface AutoMergeFailure {
+  groupKey: string;
+  reason: string;
+  /** Correlates this failure with the server-side console.error entry, for diagnosis without exposing internals to the admin. */
+  referenceId: string;
+}
+
+export interface AutoMergeBatchResult {
+  /** Count of eligible groups before this batch claimed any of them. */
+  eligibleBefore: number;
+  attempted: number;
+  merged: number;
+  skipped: number;
+  failed: number;
+  /** Eligible-group count recomputed after this batch — drives the client's continue/stop decision. */
+  remaining: number;
+  failedGroups: AutoMergeFailure[];
+  outcomes: AutoMergeGroupOutcome[];
+}
+
 /**
- * "دمج الحالات الواضحة تلقائيًا": automatically merges every currently
- * unresolved exact-word_key group that passes the meaning/concept rule.
- * Groups with a meaning or concept conflict (or any other ineligibility)
- * are left untouched in the manual queue.
+ * Processes one bounded batch of the automatic-merge backlog:
+ *
+ *   1. Atomically claims up to `limit` eligible groups (`FOR UPDATE SKIP
+ *      LOCKED` under the hood) so two concurrent runs — two tabs, two
+ *      admins — can never claim the same group.
+ *   2. Calls the existing, already-atomic and idempotent
+ *      auto_merge_duplicate_group() once per claimed group, as separate
+ *      round-trips — each group's result is durable the moment its own
+ *      call returns, independent of every other group in the batch.
+ *   3. Releases each group's claim immediately after processing
+ *      (recording a failure reason + reference id on error) rather than
+ *      waiting out the claim's lease.
+ *
+ * The caller (the admin UI) is expected to call this repeatedly — once per
+ * click-triggered "run" — until `remaining` reaches 0 or a call returns
+ * `attempted: 0`. Safe to call again after any interruption: every already
+ * -merged group is already durably committed and will not be reprocessed.
  */
-export async function bulkAutoMergeDuplicateGroups(): Promise<
-  AutoMergeResult[]
-> {
+export async function runAutoMergeBatch(
+  limit: number = AUTO_MERGE_BATCH_SIZE,
+): Promise<AutoMergeBatchResult> {
   const admin = await requireAdmin();
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc(
-    "bulk_auto_merge_duplicate_groups",
-    { p_actor: admin.userId },
+
+  const eligibleBefore = await getAutoMergeableDuplicateCount();
+
+  const { data: claimed, error: claimError } = await supabase.rpc(
+    "claim_auto_mergeable_duplicate_groups",
+    { p_actor: admin.userId, p_limit: limit },
   );
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
-    groupKey: row.group_key,
-    entryId: row.entry_id,
-    merged: row.merged,
-    reason: row.reason,
-  }));
+  if (claimError) {
+    const referenceId = randomUUID();
+    console.error(
+      `[auto-merge:${referenceId}] failed to claim a batch`,
+      claimError,
+    );
+    throw new Error(`تعذّر حجز دفعة للدمج. رمز المرجع: ${referenceId}`);
+  }
+
+  const groupKeys = claimed ?? [];
+  const { outcomes, failedGroups } = await processGroupKeys(
+    supabase,
+    admin.userId,
+    groupKeys,
+  );
+
+  const merged = outcomes.filter((o) => o.merged).length;
+  const failed = failedGroups.length;
+  const skipped = outcomes.length - merged - failed;
+  const remaining = await getAutoMergeableDuplicateCount();
+
+  return {
+    eligibleBefore,
+    attempted: groupKeys.length,
+    merged,
+    skipped,
+    failed,
+    remaining,
+    failedGroups,
+    outcomes,
+  };
+}
+
+/**
+ * Retries exactly the given (previously failed) group keys — never a fresh
+ * claim of the general backlog. Used by the admin UI's "إعادة محاولة
+ * الحالات الفاشلة" action so a retry never touches groups that already
+ * succeeded or are still queued in the normal batch order.
+ */
+export async function retryAutoMergeGroups(groupKeys: string[]): Promise<{
+  outcomes: AutoMergeGroupOutcome[];
+  failedGroups: AutoMergeFailure[];
+}> {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  return processGroupKeys(supabase, admin.userId, groupKeys);
+}
+
+async function processGroupKeys(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  actorId: string,
+  groupKeys: string[],
+): Promise<{
+  outcomes: AutoMergeGroupOutcome[];
+  failedGroups: AutoMergeFailure[];
+}> {
+  const outcomes: AutoMergeGroupOutcome[] = [];
+  const failedGroups: AutoMergeFailure[] = [];
+
+  for (const groupKey of groupKeys) {
+    try {
+      const { data, error } = await supabase.rpc("auto_merge_duplicate_group", {
+        p_actor: actorId,
+        p_group_key: groupKey,
+      });
+      if (error) throw error;
+      const row = data?.[0];
+      outcomes.push({
+        groupKey,
+        entryId: row?.entry_id ?? null,
+        merged: row?.merged ?? false,
+        reason: row?.reason ?? "unknown",
+      });
+      await supabase.rpc("release_duplicate_group_claim", {
+        p_actor: actorId,
+        p_group_key: groupKey,
+        p_failed: false,
+      });
+    } catch (err) {
+      const referenceId = randomUUID();
+      const message = (err as { message?: string })?.message ?? "unknown_error";
+      console.error(
+        `[auto-merge:${referenceId}] group ${groupKey} failed`,
+        err,
+      );
+      outcomes.push({
+        groupKey,
+        entryId: null,
+        merged: false,
+        reason: "error",
+      });
+      failedGroups.push({ groupKey, reason: message, referenceId });
+      try {
+        await supabase.rpc("release_duplicate_group_claim", {
+          p_actor: actorId,
+          p_group_key: groupKey,
+          p_failed: true,
+          p_failure_reason: message.slice(0, 500),
+        });
+      } catch (releaseError) {
+        console.error(
+          `[auto-merge:${referenceId}] failed to release claim for ${groupKey}`,
+          releaseError,
+        );
+      }
+    }
+  }
+
+  return { outcomes, failedGroups };
 }
 
 export interface DuplicateGroupMember {

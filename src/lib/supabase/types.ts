@@ -431,14 +431,23 @@ export interface Database {
         Args: { p_actor: string; p_group_key: string };
         Returns: { entry_id: string | null; merged: boolean; reason: string }[];
       };
-      bulk_auto_merge_duplicate_groups: {
-        Args: { p_actor: string };
-        Returns: {
-          group_key: string;
-          entry_id: string | null;
-          merged: boolean;
-          reason: string;
-        }[];
+      claim_auto_mergeable_duplicate_groups: {
+        Args: {
+          p_actor: string;
+          p_limit?: number;
+          p_lease_seconds?: number;
+          p_max_failures?: number;
+        };
+        Returns: string[];
+      };
+      release_duplicate_group_claim: {
+        Args: {
+          p_actor: string;
+          p_group_key: string;
+          p_failed?: boolean;
+          p_failure_reason?: string | null;
+        };
+        Returns: undefined;
       };
       duplicate_group_summary: {
         Args: Record<string, never>;
