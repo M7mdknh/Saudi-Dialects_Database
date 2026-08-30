@@ -423,6 +423,69 @@ describe("v4 regression: 'all dialects' never inherits a stale single-dialect fi
   });
 });
 
+describe("projectToExportV4 — split words regression: جب vs جيب", () => {
+  // Regression for the duplicate-management correction: "جب" (Najdi) and
+  // "جيب" (Hijazi) share a meaning but are different word forms and must
+  // never be merged into one canonical entry. After an admin uses "فصل إلى
+  // كلمات مستقلة", both remain independent canonical_entries rows linked
+  // only by a shared, admin-set concept_id.
+  const jubb = entry({
+    id: "b0000000-0000-0000-0000-0000000000a1",
+    canonical_word: "جب",
+    canonical_word_search_key: "جب",
+    main_group_code: "najdi",
+    main_group_label_ar: "نجدي",
+    local_labels: [],
+    related_words: [],
+    concept_id: "shared-pocket-concept",
+    examples: [{ id: "e-jubb-1", sentence: "حط الفلوس في جبه" }],
+  });
+  const jeeb = entry({
+    id: "b0000000-0000-0000-0000-0000000000a2",
+    canonical_word: "جيب",
+    canonical_word_search_key: "جيب",
+    main_group_code: "hijazi",
+    main_group_label_ar: "حجازي",
+    local_labels: [],
+    related_words: [],
+    concept_id: "shared-pocket-concept",
+    examples: [{ id: "e-jeeb-1", sentence: "حط الفلوس في جيبه" }],
+  });
+
+  const { records } = projectToExportV4([jubb, jeeb]);
+
+  it("keeps both words as separate export records, never merged into one", () => {
+    expect(records).toHaveLength(2);
+  });
+
+  it("preserves each word's distinct word_key", () => {
+    const keys = records.map((r) => r.word_key);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys).toContain("جب");
+    expect(keys).toContain("جيب");
+  });
+
+  it("assigns each word its own correct dialect, not the other's", () => {
+    const jubbRecord = records.find((r) => r.word === "جب")!;
+    const jeebRecord = records.find((r) => r.word === "جيب")!;
+    expect(jubbRecord.dialects).toEqual(["najdi"]);
+    expect(jeebRecord.dialects).toEqual(["hijazi"]);
+  });
+
+  it("links both records with the same shared concept_id", () => {
+    for (const record of records) {
+      expect(record.concept_id).toBe("shared-pocket-concept");
+    }
+  });
+
+  it("never puts one spelling inside the other's related_words merely because they share a concept", () => {
+    for (const record of records) {
+      expect(record.related_words).not.toContain("جب");
+      expect(record.related_words).not.toContain("جيب");
+    }
+  });
+});
+
 describe("ALLaM training JSONL", () => {
   it("maps all five dialect codes to their training tags", () => {
     expect(ALLAM_DIALECT_TAG).toEqual({

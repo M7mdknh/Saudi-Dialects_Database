@@ -25,7 +25,7 @@ export type PublicVisibility = "public" | "private";
 export type DuplicateCandidateType = "exact" | "conflict" | "fuzzy";
 
 export type DuplicateGroupStatus =
-  "unresolved" | "not_duplicate" | "ignored" | "merged";
+  "unresolved" | "not_duplicate" | "ignored" | "merged" | "split";
 
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -487,6 +487,16 @@ export interface Database {
           p_reference_prompt_id?: string | null;
         };
         Returns: string;
+      };
+      split_duplicate_group_words: {
+        Args: {
+          p_actor: string;
+          p_group_key: string;
+          p_member_signature: string;
+          p_words: unknown;
+          p_concept_id?: string | null;
+        };
+        Returns: string[];
       };
       update_canonical_entry_full: {
         Args: {

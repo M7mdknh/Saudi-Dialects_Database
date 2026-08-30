@@ -268,6 +268,83 @@ export interface MergeDuplicateGroupInput {
   referencePromptId?: string | null;
 }
 
+export interface SplitDuplicateGroupWordInput {
+  word: string;
+  wordSearchKey: string;
+  targetEntryId: string | null;
+  expectedVersion: number | null;
+  dialectIds: string[];
+  msaSynonyms: string[];
+  explanation: string;
+  relatedWords: string[];
+  register: string | null;
+  visibility: PublicVisibility;
+  referencePromptId?: string | null;
+  rawSubmissionIds: string[];
+  examples: {
+    sentence: string;
+    sourceRawExampleId: string | null;
+    position: number;
+  }[];
+  removedCanonicalExampleIds?: string[];
+}
+
+export interface SplitDuplicateGroupInput {
+  groupKey: string;
+  memberSignature: string;
+  /** Shared meaning link across the resulting words (e.g. جب / جيب), never a shared word_key. */
+  conceptId: string | null;
+  words: SplitDuplicateGroupWordInput[];
+}
+
+/**
+ * "فصل إلى كلمات مستقلة": creates or preserves one canonical entry per
+ * distinct word_key in `input.words`, each keeping its own dialects and
+ * related_words independently, optionally linked by a shared concept_id.
+ * Never merges the group's sources into a single canonical entry.
+ */
+export async function splitDuplicateGroupIntoWords(
+  input: SplitDuplicateGroupInput,
+) {
+  const admin = await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const keys = input.words.map((w) => toSearchKey(w.word));
+  if (new Set(keys).size !== keys.length) {
+    throw new Error("duplicate_word_key_in_split");
+  }
+
+  const { data, error } = await supabase.rpc("split_duplicate_group_words", {
+    p_actor: admin.userId,
+    p_group_key: input.groupKey,
+    p_member_signature: input.memberSignature,
+    p_concept_id: input.conceptId,
+    p_words: input.words.map((w) => ({
+      word: w.word,
+      wordSearchKey: toSearchKey(w.word),
+      targetEntryId: w.targetEntryId,
+      expectedVersion: w.expectedVersion,
+      dialectIds: w.dialectIds,
+      msaSynonyms: w.msaSynonyms,
+      explanation: w.explanation,
+      relatedWords: w.relatedWords,
+      register: w.register,
+      visibility: w.visibility,
+      referencePromptId: w.referencePromptId ?? null,
+      rawSubmissionIds: w.rawSubmissionIds,
+      examples: w.examples.map((e) => ({
+        sentence: e.sentence,
+        sentenceSearchKey: toSearchKey(e.sentence),
+        sourceRawExampleId: e.sourceRawExampleId,
+        position: e.position,
+      })),
+      removedCanonicalExampleIds: w.removedCanonicalExampleIds ?? [],
+    })),
+  });
+  if (error) throw error;
+  return data as string[];
+}
+
 export async function mergeDuplicateGroup(input: MergeDuplicateGroupInput) {
   const admin = await requireAdmin();
   const supabase = await createSupabaseServerClient();

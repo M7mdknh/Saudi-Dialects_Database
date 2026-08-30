@@ -6,6 +6,7 @@ import {
   mergeDuplicateGroup,
   reopenDuplicateGroup,
   resolveDuplicateGroup,
+  splitDuplicateGroupIntoWords,
   type DuplicateGroupMember,
   type DuplicateGroupRow,
 } from "./actions";
@@ -17,6 +18,7 @@ import {
   RESOLUTION_STATUS_LABELS_AR,
   formatSourceCount,
 } from "./labels";
+import { buildDefaultSplitBuckets, type SplitBucket } from "./split-groups";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ALLOWED_REGISTERS } from "@/features/exports/projection";
@@ -298,6 +300,104 @@ export function DuplicateMergeWorkspace({
           (error as { message?: string })?.message?.includes("stale")
             ? "تغيّر هذا الكيان من قبل مشرف آخر. أعد تحميل الصفحة وحاول مجدداً."
             : "تعذّر إتمام الدمج. حاول مرة أخرى.",
+        );
+      }
+    });
+  }
+
+  // --- "فصل إلى كلمات مستقلة": distinct word forms (e.g. جب / جيب) that
+  // showed up in the same duplicate group by meaning or spelling similarity
+  // must never be forced into one canonical entry. Default buckets group
+  // members by their own word_key; the admin may only edit each bucket's
+  // fields, never merge two buckets' word_keys into one.
+  const defaultSplitBuckets = useMemo(
+    () => buildDefaultSplitBuckets(members),
+    [members],
+  );
+  const [showSplit, setShowSplit] = useState(false);
+  const [splitBuckets, setSplitBuckets] = useState<SplitBucket[]>(
+    defaultSplitBuckets,
+  );
+  const [sharedConceptId, setSharedConceptId] = useState("");
+  const [splitStatus, setSplitStatus] = useState<
+    "idle" | "saving" | "error" | "done"
+  >("idle");
+  const [splitError, setSplitError] = useState("");
+
+  function openSplit() {
+    setSplitBuckets(defaultSplitBuckets);
+    setSharedConceptId(conceptId.trim());
+    setSplitError("");
+    setSplitStatus("idle");
+    setShowSplit(true);
+  }
+
+  function updateBucket(index: number, patch: Partial<SplitBucket>) {
+    setSplitBuckets((prev) =>
+      prev.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    );
+  }
+
+  function toggleBucketDialect(index: number, dialectId: string) {
+    setSplitBuckets((prev) =>
+      prev.map((b, i) => {
+        if (i !== index) return b;
+        const has = b.dialectIds.includes(dialectId);
+        return {
+          ...b,
+          dialectIds: has
+            ? b.dialectIds.filter((id) => id !== dialectId)
+            : [...b.dialectIds, dialectId],
+        };
+      }),
+    );
+  }
+
+  const splitWordKeys = splitBuckets.map((b) => toSearchKey(b.word));
+  const hasDuplicateSplitKeys =
+    new Set(splitWordKeys).size !== splitWordKeys.length;
+  const hasEmptySplitDialects = splitBuckets.some(
+    (b) => b.dialectIds.length === 0,
+  );
+
+  function handleSplit() {
+    setSplitStatus("saving");
+    startTransition(async () => {
+      try {
+        const entryIds = await splitDuplicateGroupIntoWords({
+          groupKey: row.groupKey,
+          memberSignature: row.memberSignature,
+          conceptId: sharedConceptId.trim() || null,
+          words: splitBuckets.map((b) => ({
+            word: b.word,
+            wordSearchKey: toSearchKey(b.word),
+            targetEntryId: b.targetEntryId,
+            expectedVersion: b.expectedVersion,
+            dialectIds: b.dialectIds,
+            msaSynonyms: b.msaSynonyms,
+            explanation: b.explanation,
+            relatedWords: b.relatedWords,
+            register: b.register,
+            visibility: b.visibility,
+            referencePromptId: b.referencePromptId,
+            rawSubmissionIds: b.rawSubmissionIds,
+            examples: b.examples.map((e, index) => ({
+              sentence: e.sentence,
+              sourceRawExampleId: e.sourceType === "raw" ? e.id : null,
+              position: index,
+            })),
+            removedCanonicalExampleIds: [],
+          })),
+        });
+        setSplitStatus("done");
+        router.push(`/admin/duplicates?split=${entryIds.join(",")}`);
+        router.refresh();
+      } catch (error) {
+        setSplitStatus("error");
+        setSplitError(
+          (error as { message?: string })?.message?.includes("stale")
+            ? "تغيّر أحد الكيانات من قبل مشرف آخر. أعد تحميل الصفحة وحاول مجدداً."
+            : "تعذّر إتمام الفصل. حاول مرة أخرى.",
         );
       }
     });
@@ -789,10 +889,148 @@ export function DuplicateMergeWorkspace({
               >
                 تجاهل حالياً
               </Button>
+              {defaultSplitBuckets.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={openSplit}
+                >
+                  فصل إلى كلمات مستقلة
+                </Button>
+              ) : null}
             </>
           ) : null}
         </div>
       </div>
+
+      {showSplit ? (
+        <section
+          className="border-border bg-surface flex flex-col gap-4 rounded-2xl border p-4"
+          data-testid="split-workspace"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-foreground/70 text-sm font-bold">
+              فصل إلى كلمات مستقلة
+            </h2>
+            <Button type="button" variant="ghost" onClick={() => setShowSplit(false)}>
+              إغلاق
+            </Button>
+          </div>
+          <p className="text-foreground/60 text-xs">
+            كل كلمة أدناه ستبقى كيانًا معتمدًا مستقلًا بلهجاته الخاصة. يمكنك
+            ربطها بمعرّف مفهوم مشترك دون دمجها في كلمة واحدة.
+          </p>
+
+          <Field id="dup-split-concept" label="معرّف المفهوم المشترك (اختياري)">
+            <input
+              id="dup-split-concept"
+              value={sharedConceptId}
+              onChange={(e) => setSharedConceptId(e.target.value)}
+              className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+              dir="ltr"
+            />
+          </Field>
+
+          <div className="flex flex-col gap-4">
+            {splitBuckets.map((bucket, index) => (
+              <div
+                key={bucket.wordKey || index}
+                className="border-border rounded-xl border p-3"
+                data-testid={`split-bucket-${index}`}
+              >
+                <Field
+                  id={`dup-split-word-${index}`}
+                  label={`الكلمة ${index + 1}`}
+                >
+                  <input
+                    id={`dup-split-word-${index}`}
+                    value={bucket.word}
+                    onChange={(e) =>
+                      updateBucket(index, { word: e.target.value })
+                    }
+                    className="border-border bg-surface min-h-11 w-full rounded-lg border px-3 py-2"
+                  />
+                </Field>
+                <Field
+                  id={`dup-split-explanation-${index}`}
+                  label="المعنى"
+                >
+                  <textarea
+                    id={`dup-split-explanation-${index}`}
+                    value={bucket.explanation}
+                    onChange={(e) =>
+                      updateBucket(index, { explanation: e.target.value })
+                    }
+                    rows={2}
+                    className="border-border bg-surface w-full rounded-lg border px-3 py-2"
+                  />
+                </Field>
+                <div className="mt-2">
+                  <p className="mb-1 text-sm font-semibold">اللهجات</p>
+                  {bucket.dialectIds.length === 0 ? (
+                    <p className="text-danger text-sm">
+                      اختر لهجة رئيسية واحدة على الأقل لهذه الكلمة.
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {mainGroupDialects.map((d) => {
+                      const code = d.main_group_code!;
+                      const isChecked = bucket.dialectIds.includes(d.id);
+                      return (
+                        <label
+                          key={d.id}
+                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+                            isChecked
+                              ? "border-accent bg-accent/10"
+                              : "border-border"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleBucketDialect(index, d.id)}
+                          />
+                          {MAIN_GROUP_LABELS_AR[code]}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                <p className="text-foreground/60 mt-2 text-xs">
+                  الأمثلة: {bucket.examples.length} — المصادر:{" "}
+                  {bucket.rawSubmissionIds.length +
+                    (bucket.targetEntryId ? 1 : 0)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {hasDuplicateSplitKeys ? (
+            <p role="alert" className="text-danger text-sm">
+              لا يمكن أن تشترك كلمتان في نفس الإملاء عند الفصل. عدّل الكلمة
+              لتمييزها.
+            </p>
+          ) : null}
+          {splitStatus === "error" ? (
+            <p role="alert" className="text-danger text-sm">
+              {splitError}
+            </p>
+          ) : null}
+
+          <Button
+            type="button"
+            disabled={
+              pending || hasDuplicateSplitKeys || hasEmptySplitDialects
+            }
+            onClick={handleSplit}
+          >
+            {pending && splitStatus === "saving"
+              ? "جارٍ الفصل…"
+              : "تأكيد الفصل"}
+          </Button>
+        </section>
+      ) : null}
     </div>
   );
 }

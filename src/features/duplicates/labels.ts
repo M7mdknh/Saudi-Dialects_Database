@@ -18,6 +18,7 @@ export const RESOLUTION_STATUS_LABELS_AR: Record<DuplicateGroupStatus, string> =
     not_duplicate: "ليست مكررة",
     ignored: "تم تجاهله",
     merged: "تم الدمج",
+    split: "تم الفصل إلى كلمات مستقلة",
   };
 
 export const MAIN_GROUP_LABELS_AR: Record<MainDialectGroupCode, string> = {
